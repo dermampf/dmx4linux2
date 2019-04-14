@@ -1,0 +1,1 @@
+This is a driver framework for DMX512 interfaces.
