@@ -23,7 +23,7 @@ int main (int argc, char **argv)
     {
 	struct dmx512frame frame;
 	bzero(&frame, sizeof(frame));
-	frame.port = 1; // any port.
+	frame.port = (argc > 2) ? atoi(argv[2]) : 1;
 	frame.breaksize = 0; // default
 	frame.startcode = 0;
 	frame.payload_size = 512;
