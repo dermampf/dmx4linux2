@@ -28,10 +28,13 @@ struct dmx512frame
      */
     uint16_t port;
     uint16_t flags; // up to 16 flags used for whatever, defaults to 0.
-    uint8_t  breaksize;    /* size of break in 4us units, can be up to 1020us */
-    uint8_t  startcode;
+
+    uint8_t  breaksize;    /* size of break in 4us units, can be up to 4*254us */
+    uint8_t  unused[3];
+
     uint16_t payload_size; /* number of octets in the payload. */
 
+    uint8_t  startcode;
     uint8_t  payload[512];
 
     /* @timestamp:
@@ -43,6 +46,6 @@ struct dmx512frame
     */
     struct timespec timestamp; // timestamp near the start of the break.
     struct timespec back_timestamp; // timestamp near the end of the frame (after last octet).
-};
+} __attribute__((packed));
 
 #endif // DMX512_FRAME_H
