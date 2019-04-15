@@ -1,0 +1,3 @@
+obj-m += dmx512-core.o
+dmx512-core-objs += dmx512.o dmx512framequeue.o
+ccflags-y := -I$(src)/../../../include

@@ -1,0 +1,6 @@
+#obj-y += uart/
+#obj-y += usb/
+#obj-y += pci/
+obj-m += dmx512_dummy.o
+ccflags-y := -I$(src)/../../../include
+KBUILD_EXTRA_SYMBOLS := $(src)/../core/Module.symvers
