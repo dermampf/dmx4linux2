@@ -37,8 +37,8 @@ struct dmx512_framequeue free_framequeue;
 static int _dmx512_add_port(struct dmx512_device * dev, struct dmx512_port * port)
 {
     port->device = dev;
-    list_add(&port->device_item, &dev->ports);
-    list_add(&port->portlist_item, &dmx512_ports);
+    list_add_tail(&port->device_item, &dev->ports);
+    list_add_tail(&port->portlist_item, &dmx512_ports);
     return 0;
 }
 
@@ -287,7 +287,7 @@ int dmx512_received_frame(struct dmx512_port *port, struct dmx512_framequeue_ent
 {
 	if (!port || !port->device)
 		return -1;
-
+	frame->frame.port = dmx512_port_index(port);
 	dmx512_framequeue_put(&port->device->rxframequeue, frame);
 	wake_up (&port->device->rxwait_queue);
 
