@@ -9,7 +9,6 @@
 #include <linux/slab.h>
 
 #include <linux/dmx512/dmx512.h>
-//#include "../../../include/linux/dmx512/dmx512.h"
 
 /* number of ports to create for both devices */
 static unsigned int ports_count = 8;
