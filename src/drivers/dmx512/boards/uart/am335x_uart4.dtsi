@@ -1,1 +1,30 @@
-/*am335x_uart4.dtsi*/
+/* am335x_uart4.dtsi */
+
+&am33xx_pinmux {
+        uart4_pins: uart4_pins {
+                pinctrl-single,pins = <
+                        AM33XX_IOPAD(0x8d0, PIN_INPUT_PULLUP | MUX_MODE6)       /* lcd_data12.uart4_ctsn */
+                        AM33XX_IOPAD(0x8d4, PIN_OUTPUT | MUX_MODE6)             /* lcd_data13.uart4_rtsn */
+                        AM33XX_IOPAD(0x968, PIN_INPUT | MUX_MODE1)              /* uart0_ctsn.uart4_rxd */
+                        AM33XX_IOPAD(0x96c, PIN_OUTPUT | MUX_MODE1)             /* uart0_rtsn.uart4_txd */
+                >;
+        };
+};
+
+&uart4 {
+        pinctrl-names = "default";
+        pinctrl-0 = <&uart4_pins>;
+        status = "okay";
+	rs485-rts-delay = <0 0>; /* same as if absent */
+	rs485-rts-active-high;
+	/*  rs485-rts-active-low; SN75176 has an active high DE input, but if you place an optocoupler inbetween, you might end up having an active low input */
+	linux,rs485-enabled-at-boot-time; /* no need to enable it in the driver */
+	/* rs485-rx-during-tx; - we can use that to check if data is send out right. */
+	rts-gpio <&gpio1 26 GPIO_ACTIVE_HIGH>;
+
+        {
+       		compatible = "uart-dmx";
+       		dmx-device-name = "uart4";
+       		dmx-port = <0>;
+	};
+};
