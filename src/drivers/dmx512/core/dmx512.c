@@ -92,7 +92,7 @@ static ssize_t dmx512_device_read (struct file * filp, char __user * buf, size_t
     if (dmx512_framequeue_isempty(&dmx->rxframequeue))
     {
         if ((filp->f_flags & O_NONBLOCK) == 0)
-            interruptible_sleep_on (&dmx->rxwait_queue);
+	    wait_event_interruptible (dmx->rxwait_queue, 0==dmx512_framequeue_isempty(&dmx->rxframequeue));
         else
             return 0;
     }
