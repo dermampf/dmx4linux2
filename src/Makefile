@@ -1,12 +1,14 @@
-all : modules examples
+ifneq ($(KERNELRELEASE),)
+include Kbuild
+else
 
-modules:
-	$(MAKE) -C drivers $@
+SRC := $(shell pwd)
+KERNEL_SRC ?= /lib/modules/`uname -r`/build
 
-.PHONY: examples
-examples:
-	$(MAKE) -C examples/chardev
+modules clean:
+	$(MAKE) -C $(KERNEL_SRC) M=$$PWD $@
 
-clean:
-	$(MAKE) -C examples/chardev $@
-	$(MAKE) -C drivers $@
+modules_install:
+	$(MAKE) -C $(KERNEL_SRC) M=$(SRC) modules_install
+
+endif

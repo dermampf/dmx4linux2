@@ -1,0 +1,6 @@
+.PHONY: examples
+examples:
+	$(MAKE) -C examples/chardev
+
+clean:
+	$(MAKE) KERNEL_SRC=$(KERNEL_SRC) -C drivers $@
