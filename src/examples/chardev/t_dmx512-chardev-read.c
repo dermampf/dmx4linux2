@@ -6,17 +6,15 @@
 #include <unistd.h>
 #include <fcntl.h>
 
-/*
- * send out one dmx-frame to all cards
- * If you open /dev/dmx512/card0port0 that frame is output only to that port.
- */
-
-int main ()
+int main (int argc , char **argv)
 {
-    int dmxfd = open("/dev/dmx-dummy", O_RDWR);
+    const char * card_name = (argc > 1) ? argv[1] : "/dev/dmx-card0";
+    int dmxfd = open(card_name, O_RDWR);
     if (dmxfd < 0)
 	return 1;
 
+
+    
     int count = 0;
     while (1)
     {

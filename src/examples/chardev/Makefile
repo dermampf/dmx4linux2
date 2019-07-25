@@ -1,6 +1,17 @@
 CFLAGS+=-I../../include
+LDLIBS+=-lm
 
-all : t_dmx512-chardev-write t_dmx512-chardev-read
+TARGETS=t_dmx512-chardev-write \
+	t_dmx512-chardev-read \
+	t_dmx512-chardev-read-poll \
+	t_dmx512-send-test-pattern \
+	t_sinus
+
+all :   $(TARGETS)
+
+install:
+	mkdir -p $(HOME)/dmxbin/
+	cp $(TARGETS) $(HOME)/dmxbin/
 
 clean:
-	-rm -f *.o *~ t_dmx512-chardev-write t_dmx512-chardev-read
+	-rm -f *.o *~ $(TARGETS)
