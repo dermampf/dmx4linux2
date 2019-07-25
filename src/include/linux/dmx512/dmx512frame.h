@@ -12,14 +12,20 @@
 #include <time.h>
 #endif
 
-#define DMX512_FLAG_NOBREAK (1<<0) /* omit break on tx, no break on rx, eg rdm. */
+enum
+  {
+    DMX512_FLAG_NOBREAK = (1<<0), /* omit break on tx, no break on rx, eg rdm. */
 
-#define DMX512_FLAG_RDMCRC_UNKNOWN (1<<1) /* omit break on tx, no break on rx, eg rdm. */
-#define DMX512_FLAG_RDMCRC_VALID   (2<<1) /* omit break on tx, no break on rx, eg rdm. */
-#define DMX512_FLAG_RDMCRC_INVALID (3<<1) /* omit break on tx, no break on rx, eg rdm. */
+    DMX512_FLAG_RDMCRC_UNKNOWN = (1<<1), /* */
+    DMX512_FLAG_RDMCRC_VALID   = (2<<1), /* */
+    DMX512_FLAG_RDMCRC_INVALID = (3<<1), /* */
 
-#define DMX512_FLAG_TIMESTAMP      (1<<3) /* have front timestamp */
-#define DMX512_FLAG_BACK_TIMESTAMP (1<<4) /* have back timestamp - on rx only. */
+    DMX512_FLAG_TIMESTAMP      = (1<<3), /* have front timestamp */
+    DMX512_FLAG_BACK_TIMESTAMP = (1<<4), /* have back timestamp - on rx only. */
+
+    DMX512_FLAG_IS_RDM      = (1<<6),/* RDM frame. This is also set if DMX512_FLAG_IS_RDM_DISC is set */
+    DMX512_FLAG_IS_RDM_DISC = (1<<7) /* RDM Discover request or reply */
+  };
 
 struct dmx512frame
 {
@@ -34,8 +40,14 @@ struct dmx512frame
 
     uint16_t payload_size; /* number of octets in the payload. */
 
-    uint8_t  startcode;
-    uint8_t  payload[512];
+    /*-- this is the 64 bit boundary --*/
+	union {
+		struct {
+			uint8_t  startcode;
+			uint8_t  payload[512];
+		};
+		uint8_t  data[513];
+	};
 
     /* @timestamp:
        for incoming frames this is closest to the beginning of the frame possible.

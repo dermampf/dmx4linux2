@@ -25,6 +25,7 @@ void dmx512_framequeue_init(struct dmx512_framequeue *);
 void dmx512_framequeue_cleanup(struct dmx512_framequeue *);
 int  dmx512_framequeue_isempty(struct dmx512_framequeue *);
 struct dmx512_framequeue_entry * dmx512_framequeue_get (struct dmx512_framequeue *);
+struct dmx512_framequeue_entry * dmx512_framequeue_front (struct dmx512_framequeue *);
 int  dmx512_framequeue_put(struct dmx512_framequeue *, struct dmx512_framequeue_entry *);
 
 struct dmx512_framequeue_entry * dmx512_framequeue_entry_alloc(void);

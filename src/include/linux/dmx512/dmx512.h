@@ -46,6 +46,7 @@ struct dmx512_port {
 	uint64_t capabilities;
 
 	int (*send_frame) (struct dmx512_port * port, struct dmx512_framequeue_entry * frame);
+	int (*transmitter_has_space) (struct dmx512_port * port);
     // struct dmx512_framequeue rxframequeue;
     // struct dmx512_framequeue txframequeue;
 };
@@ -56,5 +57,8 @@ extern struct dmx512_port * dmx512_port_by_index(struct dmx512_device * device, 
 extern int dmx512_port_index(struct dmx512_port * port);
 
 extern int dmx512_received_frame(struct dmx512_port *port, struct dmx512_framequeue_entry * frame);
+
+extern void dmx512_put_frame(struct dmx512_port *port, struct dmx512_framequeue_entry * frame);
+extern struct dmx512_framequeue_entry * dmx512_get_frame(struct dmx512_port *port);
 
 #endif
