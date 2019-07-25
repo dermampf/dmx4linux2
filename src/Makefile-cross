@@ -1,0 +1,8 @@
+-include $(patsubst %/,%,$(dir $(abspath $(lastword $(MAKEFILE_LIST)))))/target.makefile
+
+all:: $(OBJDIR)
+
+$(OBJDIR):
+	-mkdir -p $(OBJDIR)
+
+-include $(CURDIR)/Makefile

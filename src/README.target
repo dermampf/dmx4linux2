@@ -1,0 +1,24 @@
+
+Build for yocto with the help of an sdk.
+
+You can optionally call
+  make -f ../Makefile-cross [<target>]
+
+to build into per architecture object subfolders.
+
+
+if you would like to build for multiple targets at once, you can do that with a loop like the following:
+
+
+
+for arch in <list of env scripts>
+do
+	( . $i && make -f ../Makefile-cross )
+done
+
+e.g.
+
+for arch in  /opt/poky/2.6.2/microzed/environment-setup-cortexa9t2hf-neon-poky-linux-gnueabi
+do
+	( . $i && make -f ../Makefile-cross [<target>]
+done
