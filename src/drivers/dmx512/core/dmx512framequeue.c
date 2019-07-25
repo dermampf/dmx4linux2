@@ -59,6 +59,30 @@ struct dmx512_framequeue_entry * dmx512_framequeue_get (struct dmx512_framequeue
     return e;
 }
 
+static struct dmx512_framequeue_entry * _dmx512_framequeue_front (struct dmx512_framequeue * q)
+{
+    struct dmx512_framequeue_entry * e = NULL;
+    if (!q)
+	return 0;
+    if (!list_empty(&q->head))
+        e = (struct dmx512_framequeue_entry *)(q->head.next);
+    return e;
+}
+
+/*
+ * Do not get(remove) the entry, just return a reference to the front entry.
+ */
+struct dmx512_framequeue_entry * dmx512_framequeue_front (struct dmx512_framequeue * q)
+{
+    struct dmx512_framequeue_entry * e = NULL;
+    if (!q)
+	return 0;
+    spin_lock (&q->queue_lock);
+    e = _dmx512_framequeue_front (q);
+    spin_unlock (&q->queue_lock);
+    return e;
+}
+
 int  dmx512_framequeue_put(struct dmx512_framequeue * q, struct dmx512_framequeue_entry * e)
 {
     if (!q || !e)

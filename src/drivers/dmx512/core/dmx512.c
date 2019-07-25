@@ -11,9 +11,14 @@
 #include <linux/spinlock.h>
 #include <linux/miscdevice.h>
 #include <linux/fs.h>
-//#include <linux/device.h>
+#include <linux/poll.h>
+#include <linux/device.h>
 #include <linux/uaccess.h>
 #include <linux/sched.h>
+#include <linux/wait.h>
+#include <linux/workqueue.h>
+
+
 
 #include <linux/dmx512/dmx512.h>
 
@@ -28,22 +33,21 @@ LIST_HEAD(dmx512_ports);
 
 struct dmx512_framequeue free_framequeue;
 
-/*
- *
- * snprintf(port->name, sizeof(port->name), "name-%d", number);
- * port->capabilities = ....;
- * port->send_frame = ...;
- */
 static int _dmx512_add_port(struct dmx512_device * dev, struct dmx512_port * port)
 {
     port->device = dev;
     list_add_tail(&port->device_item, &dev->ports);
     list_add_tail(&port->portlist_item, &dmx512_ports);
+
+    printk("dmx512: add port %s to device %s\n", port->name, dev->name);
+
     return 0;
 }
 
 static int _dmx512_remove_port(struct dmx512_port * port)
 {
+    printk("dmx512: remove port %s\n", port->name);
+
     list_del(&port->device_item);
     list_del(&port->portlist_item);
     port->device = 0;
@@ -91,10 +95,9 @@ static ssize_t dmx512_device_read (struct file * filp, char __user * buf, size_t
 
     if (dmx512_framequeue_isempty(&dmx->rxframequeue))
     {
-        if ((filp->f_flags & O_NONBLOCK) == 0)
+	    if (filp->f_flags & O_NONBLOCK)
+		    return -EAGAIN;
 	    wait_event_interruptible (dmx->rxwait_queue, 0==dmx512_framequeue_isempty(&dmx->rxframequeue));
-        else
-            return 0;
     }
     e = dmx512_framequeue_get (&dmx->rxframequeue);
     if (e)
@@ -109,44 +112,80 @@ static ssize_t dmx512_device_read (struct file * filp, char __user * buf, size_t
 
 static ssize_t dmx512_device_write (struct file * filp, const char __user * buf, size_t size, loff_t * off)
 {
-    struct dmx512_device *dmx = (struct dmx512_device *)filp->private_data;
-    if (dmx)
-    {
-	    struct dmx512_framequeue_entry * e = dmx512_framequeue_get (&free_framequeue);
-	    if (!e)
-		    return -ENOMEM;
-	    if (copy_from_user (&e->frame, buf, sizeof(struct dmx512frame)) == 0)
-	    {
-		    struct dmx512_port * p = dmx512_port_by_index(dmx, e->frame.port);
-		    if (p)
-		    {
-			    // dmx512_framequeue_put(&dmx->txframequeue, e);
-			    p->send_frame(p, e);
-			    return sizeof(struct dmx512frame);
-		    }
-		    dmx512_framequeue_put(&free_framequeue, e);
-	    }
-	    else
-		    return -EINVAL;
-    }
-    return -ENODEV;
+	ssize_t err = -ENODEV;
+	struct dmx512_device *dmx = (struct dmx512_device *)filp->private_data;
+	if (dmx)
+	{
+		// do not remove the entry from the queue, just get the port-number from the top entry.
+		// then find the port for that entry and if the port is not ready then:
+		// either return -EAGAIN or -EBUSY if the device is opened with O_NONBLOCK
+		// or wait until the port becomes ready again.
+		// then fetch the entry from the queue and send it to the port.
+		struct dmx512_framequeue_entry * e = dmx512_framequeue_get (&free_framequeue);
+		if (!e)
+			return -ENOMEM;
+
+		err = -EINVAL;
+		if ((size >= sizeof(struct dmx512frame)) && !copy_from_user (&e->frame, buf, sizeof(struct dmx512frame)))
+		{
+			struct dmx512_port * p = dmx512_port_by_index(dmx, e->frame.port);
+			if (p)
+			{
+#if 0
+				if (!(filp->f_flags & O_NONBLOCK) && p->transmitter_has_space && !p->transmitter_has_space(p))
+				{
+					wait_event_interruptible (p->txwait_queue, p->transmitter_has_space(p));
+				}
+#endif
+				if ((p->transmitter_has_space==0) || p->transmitter_has_space(p))
+				{
+					// dmx512_framequeue_put(&dmx->txframequeue, e);
+					p->send_frame(p, e);
+					return sizeof(struct dmx512frame);
+				}
+				err = -EAGAIN; // or -EBUSY
+			}
+		}
+		dmx512_framequeue_put(&free_framequeue, e);
+	}
+	return err;
+}
+
+
+static unsigned int dmx512_device_poll (struct file *file, poll_table *wait)
+{
+	struct dmx512_device *dmx = (struct dmx512_device *)file->private_data;
+	if (dmx)
+	{
+		unsigned int ret;
+		ret = 0;
+		poll_wait(file, &dmx->rxwait_queue, wait);
+
+		if (!dmx512_framequeue_isempty(&dmx->rxframequeue))
+			ret |= POLLIN | POLLRDNORM;
+#if 0
+		if(dmx512_framequeue_isempty(&dmx->txframequeue)) // buffer not full. write wont block
+			ret |= POLLOUT | POLLWRNORM;
+#endif
+		return ret;
+	}
+	return 0;
 }
 
 
 static const struct file_operations dmx512_device_fops = {
-    .open = dmx512_device_open,
+    .open    = dmx512_device_open,
     .release = dmx512_device_release,
 
-    .read = dmx512_device_read,
+    .read  = dmx512_device_read,
     .write = dmx512_device_write,
+    .poll  = dmx512_device_poll,
 
     // .unlocked_ioctl = dmx512_device_ioctl,
+    // long (*unlocked_ioctl) (struct file *, unsigned int, unsigned long);
+
     // .compat_ioctl = dmx512_device_ioctl,
-/*
-        __poll_t (*poll) (struct file *, struct poll_table_struct *);
-        long (*unlocked_ioctl) (struct file *, unsigned int, unsigned long);
-        long (*compat_ioctl) (struct file *, unsigned int, unsigned long);
-*/
+    // long (*compat_ioctl) (struct file *, unsigned int, unsigned long);
 };
 
 static int _register_dmx512_device(struct dmx512_device * dev, void * data)
@@ -250,7 +289,15 @@ int devm_register_dmx512_device(struct device * dev, struct dmx512_device * dmx,
 }
 EXPORT_SYMBOL(devm_register_dmx512_device);
 
-/* add port to device and to dmx512_ports */
+/* add port to device and to dmx512_ports
+ *
+ * snprintf(port->name, sizeof(port->name), "name-%d", number);
+ * port->capabilities = ....;
+ * port->send_frame = ...;
+ * port->transmitter_has_space = ...;
+ * dmx512_add_port(device, port);
+ */
+
 int dmx512_add_port(struct dmx512_device * dev, struct dmx512_port *port)
 {
     int ret;
@@ -294,6 +341,26 @@ int dmx512_received_frame(struct dmx512_port *port, struct dmx512_framequeue_ent
 	return 0;
 }
 EXPORT_SYMBOL(dmx512_received_frame);
+
+void dmx512_put_frame(struct dmx512_port *port, struct dmx512_framequeue_entry * frame)
+{
+	(void)port;
+	/* we may later use the port to control the per port usage of frames
+	   or have some accounting. */
+	dmx512_framequeue_put(&free_framequeue, frame);
+}
+EXPORT_SYMBOL(dmx512_put_frame);
+
+struct dmx512_framequeue_entry * dmx512_get_frame(struct dmx512_port *port)
+{
+	(void)port;
+	/* we may later use the port to control the per port usage of frames
+	   or have some accounting. */
+	return dmx512_framequeue_get (&free_framequeue);
+}
+EXPORT_SYMBOL(dmx512_get_frame);
+
+
 
 static int __init dmx512_core_init(void)
 {
