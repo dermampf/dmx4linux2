@@ -172,6 +172,12 @@ static unsigned int dmx512_device_poll (struct file *file, poll_table *wait)
 	return 0;
 }
 
+static long dmx512_device_ioctl (struct file * filp,
+				 unsigned int command,
+				 unsigned long arg)
+{
+	return 0;
+}
 
 static const struct file_operations dmx512_device_fops = {
     .open    = dmx512_device_open,
@@ -181,10 +187,10 @@ static const struct file_operations dmx512_device_fops = {
     .write = dmx512_device_write,
     .poll  = dmx512_device_poll,
 
-    // .unlocked_ioctl = dmx512_device_ioctl,
+    .unlocked_ioctl = dmx512_device_ioctl,
     // long (*unlocked_ioctl) (struct file *, unsigned int, unsigned long);
 
-    // .compat_ioctl = dmx512_device_ioctl,
+    .compat_ioctl = dmx512_device_ioctl,
     // long (*compat_ioctl) (struct file *, unsigned int, unsigned long);
 };
 
