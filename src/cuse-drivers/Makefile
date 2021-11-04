@@ -4,7 +4,7 @@ CFLAGS+=-I../include/
 LDLIBS+=-lpthread
 CFLAGS+=-g -ggdb
 
-TARGETS=$(OBJDIR)dmx512_cuse_loop
+TARGETS=$(OBJDIR)dmx512_cuse_loop $(OBJDIR)dmx512_cuse_uart
 
 all :: $(OBJDIR) $(TARGETS)
 
@@ -12,6 +12,9 @@ $(OBJDIR)t_rtuart_userspace : $(OBJDIR)t_rtuart_userspace.o
 
 
 $(OBJDIR)dmx512_cuse_loop : $(OBJDIR)dmx512_cuse_loop_device.o $(OBJDIR)dmx512_cuse_dev.o
+	$(CC) -o $@ $^ $(LDLIBS) -lfuse
+
+$(OBJDIR)dmx512_cuse_uart : $(OBJDIR)dmx512_cuse_uart.o $(OBJDIR)dmx512_cuse_dev.o
 	$(CC) -o $@ $^ $(LDLIBS) -lfuse
 
 clean ::
