@@ -20,6 +20,7 @@
 
 
 
+#include <linux/dmx512/dmx512_priv.h>
 #include <linux/dmx512/dmx512.h>
 
 DEFINE_SPINLOCK(dmx512_lock);
@@ -271,6 +272,32 @@ static struct dmx512_port * _dmx512_port_by_index(struct dmx512_device * device,
 
 /*---- public functions ----*/
 
+struct dmx512_device * dmx512_create_device(const char * name)
+{
+        struct dmx512_device *dmx = kzalloc(sizeof(*dmx), GFP_KERNEL);
+	if (dmx == NULL)
+		return ERR_PTR(-ENOMEM);
+
+	dmx->name = kstrdup(name ?: "unknown", GFP_KERNEL);
+	dmx->parent = 0;
+	dmx->owner = THIS_MODULE;
+        return dmx;
+}
+EXPORT_SYMBOL(dmx512_create_device);
+
+void dmx512_delete_device(struct dmx512_device *device)
+{
+	if (device)
+        {
+		// unregister_dmx512_device(device);
+                // loop over all ports:port and call dmx512_delete_port(port);
+		kfree(device);
+        }
+}
+EXPORT_SYMBOL(dmx512_delete_device);
+
+
+
 int register_dmx512_device(struct dmx512_device * dev, void * data)
 {
     int ret;
@@ -281,8 +308,10 @@ EXPORT_SYMBOL(register_dmx512_device);
 
 int unregister_dmx512_device(struct dmx512_device * dev)
 {
-    int ret;
-    DMX512_LOCKED(ret = _unregister_dmx512_device(dev));
+    int ret = 0;
+    if (dev) {
+            DMX512_LOCKED(ret = _unregister_dmx512_device(dev));
+    }
     return ret;
 }
 EXPORT_SYMBOL(unregister_dmx512_device);
@@ -295,6 +324,13 @@ int devm_register_dmx512_device(struct device * dev, struct dmx512_device * dmx,
 }
 EXPORT_SYMBOL(devm_register_dmx512_device);
 
+
+const char * dmx512_device_name(struct dmx512_device * dmx)
+{
+        return dmx ? dmx->name : 0;
+}
+EXPORT_SYMBOL(dmx512_device_name);
+
 /* add port to device and to dmx512_ports
  *
  * snprintf(port->name, sizeof(port->name), "name-%d", number);
@@ -303,6 +339,45 @@ EXPORT_SYMBOL(devm_register_dmx512_device);
  * port->transmitter_has_space = ...;
  * dmx512_add_port(device, port);
  */
+
+struct dmx512_port * dmx512_create_port(struct dmx512_device *dmx,
+                                        const char * portname,
+                                        const uint64_t capabilities)
+{
+        struct dmx512_port * port = kzalloc(sizeof(*port), GFP_KERNEL);
+	if (port == NULL)
+		return ERR_PTR(-ENOMEM);
+
+        port->device = dmx;
+        strcpy(port->name, portname);
+        port->capabilities = capabilities;
+        port->send_frame = 0;
+        return port;
+}
+EXPORT_SYMBOL(dmx512_create_port);
+
+void dmx512_delete_port(struct dmx512_port * port)
+{
+        if (port) {
+                dmx512_remove_port(port);
+                kfree(port);
+        }
+}
+EXPORT_SYMBOL(dmx512_delete_port);
+
+
+void dmx512_port_set_sendframe(struct dmx512_port *port,
+                               int (*callback_fn) (struct dmx512_port *,
+                                                   struct dmx512_framequeue_entry *)
+        )
+{
+        if (port)
+                port->send_frame = callback_fn;
+}
+EXPORT_SYMBOL(dmx512_port_set_sendframe);
+
+                                        
+                                        
 
 int dmx512_add_port(struct dmx512_device * dev, struct dmx512_port *port)
 {
@@ -335,6 +410,26 @@ int dmx512_port_index(struct dmx512_port * port)
     return ret;
 }
 EXPORT_SYMBOL(dmx512_port_index);
+
+void dmx512_port_set_userptr(struct dmx512_port * port, void * userptr)
+{
+  if (port)
+    port->userptr = userptr;
+}
+EXPORT_SYMBOL(dmx512_port_set_userptr);
+
+void * dmx512_port_userptr(struct dmx512_port * port)
+{
+  return port ? port->userptr : 0;
+}
+EXPORT_SYMBOL(dmx512_port_userptr);
+
+const char * dmx512_port_name(struct dmx512_port * port)
+{
+        return port ? port->name : 0;
+}
+EXPORT_SYMBOL(dmx512_port_name);
+
 
 int dmx512_received_frame(struct dmx512_port *port, struct dmx512_framequeue_entry * frame)
 {

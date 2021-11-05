@@ -15,20 +15,10 @@ static unsigned int ports_count = 8;
 module_param(ports_count, uint, 0);
 MODULE_PARM_DESC(ports_count, "number of ports to create for both dummy devices");
 
-static struct dmx512_device *g_dmx_devices[2] = {0,0};
-
 static int dmx512_dummy_send_frame (struct dmx512_port * port, struct dmx512_framequeue_entry * frame)
 {
-	const int other_device_index = (port->device == g_dmx_devices[0]) ? 1 : 0;
-	struct dmx512_device *other_device = g_dmx_devices[other_device_index];
-
-	/*
-	 * Send the frame to the same port of the receive queue of the other device.
-	 * No need to change the frame, as the data is valid on the recive path.
-	 * The timestamp difference is not worth it.
-	 */
-	struct dmx512_port * dst_port = dmx512_port_by_index(other_device, dmx512_port_index(port));
-	if (dst_port)
+        struct dmx512_port *dst_port = (struct dmx512_port *)dmx512_port_userptr(port);
+        if (dst_port)
 	    dmx512_received_frame(dst_port, frame);
 	return 0;
 }
@@ -37,13 +27,11 @@ static struct dmx512_device * create_dummy_dmx_device(const char * name)
 {
         int ret;
 	int i;
-	struct dmx512_device *dmx = kzalloc(sizeof(*dmx), GFP_KERNEL);
-	if (dmx == NULL)
-		return ERR_PTR(-ENOMEM);
 
-	dmx->name = kstrdup(name ?: "unknown", GFP_KERNEL);
-	dmx->parent = 0;
-	dmx->owner = THIS_MODULE;
+        struct dmx512_device *dmx = dmx512_create_device(name ?: "unknown");
+	if (IS_ERR(dmx))
+		return dmx;
+
 	ret = register_dmx512_device(dmx, 0);
 	if (ret < 0) {
 		kfree(dmx);
@@ -53,47 +41,53 @@ static struct dmx512_device * create_dummy_dmx_device(const char * name)
 
 	for (i = 0; i < ports_count; ++i)
 	{
-		struct dmx512_port * port = kzalloc(sizeof(*port), GFP_KERNEL);
+                struct dmx512_port * port = 0;
+                char portname[128];
+                snprintf(portname, sizeof(portname), "%s-%d", name?: "unknown", i);
+                port = dmx512_create_port(dmx, portname, DMX512_CAP_RDM);
 		if (port)
 		{
-			port->device = dmx;
-			snprintf(port->name, sizeof(port->name), "%s-%d", dmx->name, i);
-			port->capabilities = DMX512_CAP_RDM;
-			port->send_frame = dmx512_dummy_send_frame;
+                        dmx512_port_set_sendframe(port, dmx512_dummy_send_frame);
 			dmx512_add_port(dmx, port);
 		}
 	}
 	return dmx;
 }
 
+
+static struct dmx512_device *g_dmx_devices[2] = {0,0};
+
 static int __init dmx512_dummy_driver_init(void)
 {
-	struct dmx512_device *dmx;
+	struct dmx512_device *dmx0, *dmx1;
+        unsigned int i;
 
 	printk(KERN_INFO "loading dmx512 dummy driver\n");
-	dmx = create_dummy_dmx_device("card0");
-	if (IS_ERR(dmx))
-		return PTR_ERR(dmx);
-	g_dmx_devices[0] = dmx;
+	dmx0 = create_dummy_dmx_device("card0");
+	if (IS_ERR(dmx0))
+		return PTR_ERR(dmx0);
+	g_dmx_devices[0] = dmx0;
 
-	dmx = create_dummy_dmx_device("card1");
-	if (IS_ERR(dmx))
-		return PTR_ERR(dmx);
-	g_dmx_devices[1] = dmx;
+	dmx1 = create_dummy_dmx_device("card1");
+	if (IS_ERR(dmx1))
+		return PTR_ERR(dmx1);
+	g_dmx_devices[1] = dmx1;
 
+	for (i = 0; i < ports_count; ++i)
+	{
+                dmx512_port_set_userptr(dmx512_port_by_index(dmx0, i), dmx512_port_by_index(dmx1, i));
+                dmx512_port_set_userptr(dmx512_port_by_index(dmx1, i), dmx512_port_by_index(dmx0, i));
+        }
+        
         return 0;
 }
 
 static void __exit dmx512_dummy_driver_exit(void)
 {
-	if (g_dmx_devices[0])
-		unregister_dmx512_device(g_dmx_devices[0]);
-	if (g_dmx_devices[1])
-		unregister_dmx512_device(g_dmx_devices[1]);
-	if (g_dmx_devices[0])
-		kfree(g_dmx_devices[0]);
-	if (g_dmx_devices[1])
-		kfree(g_dmx_devices[1]);
+        unregister_dmx512_device(g_dmx_devices[0]);
+        unregister_dmx512_device(g_dmx_devices[1]);
+        dmx512_delete_device(g_dmx_devices[0]);
+        dmx512_delete_device(g_dmx_devices[1]);
 	printk(KERN_INFO "unloading dmx512 dummy driver\n");
 }
 
