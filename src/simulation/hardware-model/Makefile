@@ -1,6 +1,6 @@
 # Makefile for the simulation
 
-all : libhardware_model.so
+all : libhardware_model.so hw_model_cmdline
 
 UART_DIR=3rdparty/uart16550/rtl/verilog/
 
@@ -41,6 +41,9 @@ libhardware_model.so : hardware_model.cpp $(VERILATOR_OBJS) $(VERILATOR_CXX_FILE
 
 obj_dir/Vtop__Trace.cpp obj_dir/Vtop__Trace__Slow.cpp obj_dir/Vtop.cpp obj_dir/Vtop__Syms.cpp: $(VERILOG_FILES) $(VERILOG_FILES)
 	verilator --trace -cc -Wno-fatal $(VERILOG_INCLUDE_PATH) --top-module top $(VERILOG_FILES)
+
+hw_model_cmdline : hw_model_cmdline.o
+	$(CC) -o $@ $< -L. -lhardware_model
 
 run : test_model
 	./test_model
