@@ -497,7 +497,7 @@ public:
           tb()->reset = 0;
         tb()->clk = tb()->clk ? 0 : 1;
 
-        ++g_simulationTime_ns;
+        g_simulationTime_ns += 5;
       }
   }
 };
