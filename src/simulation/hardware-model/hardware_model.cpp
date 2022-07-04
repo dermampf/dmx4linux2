@@ -435,11 +435,11 @@ public:
   {
     // Create an instance of our module under test
     m_tb = new Vtop;
-    if (!trace)
+    if (!trace && getenv("HARDWARE_MODEL_VDC_FILENAME"))
       {
         trace = new VerilatedVcdC;
         tb()->trace(trace, 99);
-        trace->open("test.vdc");
+        trace->open(getenv("HARDWARE_MODEL_VDC_FILENAME"));
       }
     start();
   }
