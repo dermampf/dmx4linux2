@@ -1,3 +1,7 @@
+// SPDX-License-Identifier: GPL-2.0
+/*
+ * Copyright (C) 2021 Michael Stickel <michael@cubic.org>
+ */
 #include "dmx512_ioctls.h"
 #include <sys/ioctl.h>
 

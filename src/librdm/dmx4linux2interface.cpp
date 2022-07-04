@@ -1,3 +1,7 @@
+// SPDX-License-Identifier: GPL-2.0
+/*
+ * Copyright (C) 2021 Michael Stickel <michael@cubic.org>
+ */
 #include "dmx4linux2interface.hpp"
 #include "dmx4linux2.hpp"
 #include <linux/dmx512/dmx512frame.h>

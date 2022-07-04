@@ -1,3 +1,7 @@
+// SPDX-License-Identifier: GPL-2.0
+/*
+ * Copyright (C) 2021 Michael Stickel <michael@cubic.org>
+ */
 #include "rtuart_dmx512_client.h"
 #include "rtuart_client.h"
 #include "rtuart.h"

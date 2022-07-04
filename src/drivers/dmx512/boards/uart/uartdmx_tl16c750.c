@@ -1,3 +1,7 @@
+// SPDX-License-Identifier: GPL-2.0
+/*
+ * Copyright (C) 2021 Michael Stickel <michael@cubic.org>
+ */
 /*
  * creates two devices with 8 ports. All frames send to one port of first device
  * are received on the corresponding port of the other device and vice versa.

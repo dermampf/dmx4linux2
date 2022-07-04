@@ -1,3 +1,7 @@
+/* SPDX-License-Identifier: GPL-2.0+ WITH Linux-syscall-note */
+/*
+ * Copyright (C) 2021 Michael Stickel <michael@cubic.org>
+ */
 #ifndef DRIVER_DMX512_PRIV_H
 #define DRIVER_DMX512_PRIV_H
 

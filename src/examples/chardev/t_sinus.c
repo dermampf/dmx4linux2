@@ -1,3 +1,7 @@
+// SPDX-License-Identifier: GPL-2.0
+/*
+ * Copyright (C) 2015 Michael Stickel <michael@cubic.org>
+ */
 #include <linux/dmx512/dmx512frame.h>
 
 #include <fcntl.h>

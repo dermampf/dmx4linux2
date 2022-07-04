@@ -1,3 +1,7 @@
+// SPDX-License-Identifier: GPL-2.0
+/*
+ * Copyright (C) 2021 Michael Stickel <michael@cubic.org>
+ */
 /*
  * This is a cuse client, that implements the dmx4linux2 uapi.
  * It is meant for testing new uapi features and for implementing

@@ -1,3 +1,7 @@
+// SPDX-License-Identifier: GPL-2.0
+/*
+ * Copyright (C) 2021 Michael Stickel <michael@cubic.org>
+ */
 /*
  * The dmx512 core infrastructure. Contains all dmx512 registration and deregistration functions,
  * as well as all dmx512 core utilities.

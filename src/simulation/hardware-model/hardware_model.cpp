@@ -1,3 +1,7 @@
+// SPDX-License-Identifier: GPL-2.0
+/*
+ * Copyright (C) 2021 Michael Stickel <michael@cubic.org>
+ */
 // https://github.com/grg/verilator/blob/master/test_c/sim_main.cpp
 // https://zipcpu.com/blog/2017/06/21/looking-at-verilator.html
 /*

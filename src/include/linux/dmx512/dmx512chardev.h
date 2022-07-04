@@ -1,3 +1,7 @@
+/* SPDX-License-Identifier: GPL-2.0+ WITH Linux-syscall-note */
+/*
+ * Copyright (C) 2021 Michael Stickel <michael@cubic.org>
+ */
 /*
 /dev/dxm512/cards    - all cards.
 /dev/dxm512/cardX    - only this card.
