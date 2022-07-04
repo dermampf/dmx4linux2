@@ -1,5 +1,7 @@
 # Makefile for the simulation
 
+all : libhardware_model.so
+
 UART_DIR=3rdparty/uart16550/rtl/verilog/
 
 VERILOG_FILES=sim_top.v
@@ -13,6 +15,9 @@ CFLAGS+=-g -ggdb
 CXXFLAGS+=-g -ggdb
 LFLAGS+=-g -ggdb
 LDFLAGS+=-g -ggdb
+
+CFLAGS+=-fPIC
+CXXFLAGS+=-fPIC
 
 CXXFLAGS+=-Iobj_dir/ -I/usr/share/verilator/include/
 CXXFLAGS+=-std=c++17
@@ -28,18 +33,21 @@ VERILATOR_OBJS+=obj_dir/Vtop__Trace.o
 
 VERILOG_INCLUDE_PATH+=-I.
 
-sim_top : hardware_model.cpp test_model.o $(VERILATOR_OBJS) $(VERILATOR_CXX_FILES)
+test_model : hardware_model.cpp test_model.o $(VERILATOR_OBJS) $(VERILATOR_CXX_FILES)
 	$(CXX) $(CXXFLAGS) -o $@ $^ $(LDLIBS)
+
+libhardware_model.so : hardware_model.cpp $(VERILATOR_OBJS) $(VERILATOR_CXX_FILES)
+	$(CXX) -shared $(CXXFLAGS) -o $@ $^ $(LDLIBS)
 
 obj_dir/Vtop__Trace.cpp obj_dir/Vtop__Trace__Slow.cpp obj_dir/Vtop.cpp obj_dir/Vtop__Syms.cpp: $(VERILOG_FILES) $(VERILOG_FILES)
 	verilator --trace -cc -Wno-fatal $(VERILOG_INCLUDE_PATH) --top-module top $(VERILOG_FILES)
 
-run : sim_top
-	./sim_top
+run : test_model
+	./test_model
 
 clean:
 	-rm -rf obj_dir
-	-rm -f *~ sim_top *.o *.vdc
+	-rm -f *~ test_model *.so *.o *.vdc
 
 # See also:
 # http://manpages.ubuntu.com/manpages/trusty/man1/verilator.1.html
