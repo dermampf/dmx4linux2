@@ -162,7 +162,7 @@ public:
   }
   void controlOutputs()
   {
-    dmx_rx = dmx_tx;
+    dmx_rx = dmx_tx | !dmx_txen;
   }
   void handleInputs()
   {
