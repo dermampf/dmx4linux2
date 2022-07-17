@@ -48,9 +48,12 @@ hw_model_cmdline : hw_model_cmdline.o
 run : test_model
 	./test_model
 
+realclean: clean
+	-rm -f test_model hw_model_cmdline *.so
+
 clean:
 	-rm -rf obj_dir
-	-rm -f *~ test_model *.so *.o *.vdc
+	-rm -f *~ *.o *.vdc
 
 # See also:
 # http://manpages.ubuntu.com/manpages/trusty/man1/verilator.1.html
