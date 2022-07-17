@@ -34,6 +34,29 @@ void handleUartIrq(int irqno, void *arg)
     }
 }
 
+static void pc16c550_send_dmx()
+{
+  // 100MHz clock  Break 88us for 8bits / 11us/bit => 100MHz = 10ns/cycle / 16
+  const double baseclock = 100000000.0; // 100MHz
+  const double serialclock = baseclock / 16.0; // 16 times oversampling
+  const double break_bittime = 11.0/1000000.0; // 88us / 8bits = 11us/bit
+  const double dmx_bittime = 4.0/1000000.0; // 4us DMX bittime
+  const int break_divisor = (int)((serialclock * break_bittime) + 0.9999);
+  const int dmx_divisor = (int)((serialclock * dmx_bittime) + 0.9999);
+
+
+  // Send break
+  wbWriteMemory(3, 1, 0x80);
+  wbWriteMemory(0, 1, break_divisor&0xff);
+  wbWriteMemory(1, 1, (break_divisor>>8)&0xff);
+  wbWriteMemory(3, 1, 7);
+  wbWriteMemory(0, 1, 0);
+
+  // Wait for octet to be send out
+
+}
+
+
 int main(int argc, char **argv)
 {
   wbStartup(argc, argv);
