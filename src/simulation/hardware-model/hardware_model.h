@@ -13,6 +13,8 @@ extern "C" {
 
   void wbStartup(int argc, char **argv);
 
+  void wbStart();
+
   void wbCleanup();
 
   void wbWriteMemory(uint32_t address,
@@ -25,6 +27,9 @@ extern "C" {
   void wbBindInterrupt(int irqno,
                        void (*irqfunc)(int irqno, void *arg),
                        void * arg);
+
+  void wbBindDmxCallback(int (*handler)(void *arg, int txen, int tx, int led),
+                         void * arg);
 
 #ifdef __cplusplus
 }

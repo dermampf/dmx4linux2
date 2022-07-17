@@ -147,6 +147,7 @@ class DmxBus  : public SimulationModuleI
   vluint8_t &  dmx_tx;
   vluint8_t &  dmx_rx;
   vluint8_t &  dmx_led;
+  std::function<int(int,int,int)> dmxHandler;
 public:
   DmxBus(
          vluint8_t &  _dmx_txen,
@@ -162,7 +163,12 @@ public:
   }
   void controlOutputs()
   {
-    dmx_rx = dmx_tx | !dmx_txen;
+    if (dmxHandler)
+      {
+        dmx_rx = dmxHandler(dmx_txen, dmx_tx, dmx_led);
+      }
+    else
+      dmx_rx = dmx_tx | !dmx_txen;
   }
   void handleInputs()
   {
@@ -179,6 +185,11 @@ public:
       );
      return dmxbus;
     }
+
+  void bindDmxCallback(std::function<int(int,int,int)> handler)
+  {
+    dmxHandler = handler;
+  }
 };
 
 
@@ -441,7 +452,6 @@ public:
         tb()->trace(trace, 99);
         trace->open(getenv("HARDWARE_MODEL_VDC_FILENAME"));
       }
-    start();
   }
 
   ~SimulationToplevel()
@@ -455,6 +465,7 @@ public:
   void stop() { m_run = false; }
   void start()
   {
+    printf ("starting model thread\n");
     m_busHandler = std::thread( [this](){this->simulationLoop();} );
   }
 
@@ -523,6 +534,11 @@ public:
     sim.addModule (dmxbus);
   }
 
+  void start()
+  {
+    sim.start();
+  }
+
   void writeMemory(uint32_t address,
                    uint8_t  mask,
                    uint32_t data)
@@ -539,6 +555,11 @@ public:
   void bindInterrupt (int irqno, std::function<void()> handler)
   {
     irqhandler->bindInterrupt(irqno, handler);
+  }
+
+  void bindDmxCallback(std::function<int(int,int,int)> handler)
+  {
+    dmxbus->bindDmxCallback(handler);
   }
 };
 
@@ -570,7 +591,19 @@ extern "C" void wbStartup(int argc, char **argv)
       Verilated::traceEverOn(true);
       Verilated::commandArgs(argc, argv);
       g_dmxuart = new SimulatedDmxUart();
+      // g_dmxuart->start();
     }
+}
+
+extern "C" void wbStart()
+{
+  if (g_dmxuart)
+    {
+      printf ("try to start model\n");
+      g_dmxuart->start();
+    }
+  else
+    printf ("wbStartup: no simulation found\n");
 }
 
 extern "C" void wbCleanup()
@@ -595,6 +628,23 @@ extern "C" void wbBindInterrupt(int irqno,
          [irqfunc, irqno, arg]()
          {
            irqfunc(irqno, arg);
+         }
+         );
+    }
+}
+
+extern "C" void wbBindDmxCallback(int (*handler)(void *arg, int txen, int tx, int led),
+                                  void * arg)
+{
+  if (g_dmxuart && handler)
+    {
+      g_dmxuart->bindDmxCallback
+        (
+         [handler, arg](int txen, int tx, int led) -> int
+         {
+           return handler
+             ? handler(arg, txen, tx, led)
+             : 0;
          }
          );
     }
