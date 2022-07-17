@@ -38,6 +38,7 @@ int main(int argc, char **argv)
 {
   wbStartup(argc, argv);
   wbBindInterrupt(0, handleUartIrq, NULL);
+  wbStart();
 
   printf ("requester\n");
   sleep(1);
