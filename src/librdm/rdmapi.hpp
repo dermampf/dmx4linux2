@@ -115,9 +115,12 @@ namespace Rdm
     class RdmApi : public DmxTransceiver
     {
 	friend RdmApiSetter;
+    public:
+	enum Verbosity { Quiet = 0, Wisper, Loud, Screaming };
     private:
 	std::list<Rdm::RdmFuture*>  m_futures;
 	std::vector<Rdm::Uid> m_discoveredDevices;
+	Verbosity  m_verbosity;
     public:
 	RdmApi();
 
@@ -126,12 +129,15 @@ namespace Rdm
 
 	void mute(const Rdm::Uid & whom);
 	void unmute(const Rdm::Uid & whom);
-	void startDiscovery(const Rdm::Uid & from, const Rdm::Uid & to);
-	void startDiscovery();
+	void startDiscovery(const Rdm::Uid & from,
+			    const Rdm::Uid & to,
+			    const unsigned long maxSearchCount = 0xffffffff);
+	void startDiscovery(const unsigned long maxSearchCount = 0xffffffff);
         const std::vector<Rdm::Uid> devicesDiscovered() const;
 
         std::vector<Rdm::Uid> discoverDevices(const Rdm::Uid & from,
-					      const Rdm::Uid & to);
+					      const Rdm::Uid & to,
+					      const unsigned long maxSearchCount = 0xffffffff);
 
 
 	RdmApiSetter set(const Rdm::Uid & who, const int pid);
@@ -140,6 +146,9 @@ namespace Rdm
 	// the future makes it possible to kick start multiple requests
 	// and handle them later.
 	RdmFuture & get(const Rdm::Uid &, const int pid);
+
+	Verbosity verbosity() const;
+	void verbosity(const Verbosity);
 
     protected:
 	void addFuture(Rdm::RdmFuture & f);

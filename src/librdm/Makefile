@@ -8,7 +8,7 @@ LDLIBS+=-lreadline
 TARGETS=$(OBJDIR)rdmresponder $(OBJDIR)rdmtool $(OBJDIR)rdmshell
 all :: $(TARGETS)
 
-$(OBJDIR)rdmresponder : $(OBJDIR)rdmresponder.o $(OBJDIR)dmx4linux2.o $(OBJDIR)dmx4linux2interface.o dmx.o $(OBJDIR)rdmdevice.o $(OBJDIR)dmxbus.o
+$(OBJDIR)rdmresponder : $(OBJDIR)rdmresponder.o $(OBJDIR)dmx4linux2.o $(OBJDIR)dmx4linux2interface.o $(OBJDIR)dmx.o $(OBJDIR)rdmdevice.o $(OBJDIR)dmxbus.o
 	$(LINK.cc) $^ $(LOADLIBES) $(LDLIBS) -o $@
 
 $(OBJDIR)rdmtool : $(OBJDIR)rdmtool.o $(OBJDIR)dmx4linux2.o $(OBJDIR)dmx4linux2interface.o $(OBJDIR)dmx.o

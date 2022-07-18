@@ -13,7 +13,7 @@
 
 int main (int argc, char **argv)
 {
-#if 0
+#if 1
     DmxBus dmxbus;
     std::vector<RdmDevice*> devices;
     devices.push_back(new RdmDevice("1", 0x123400000815L));
@@ -33,13 +33,13 @@ int main (int argc, char **argv)
 	perror("open dmx device");
 	return 1;
     }
-    
+
     dmxbus.masterPort().registerReceiver(dmx);
     dmx.registerReceiver(dmxbus.masterPort());
     while (1)
 	dmx.handleIngressData();
 #else
-    RdmDevice device ("3", 0x12340000002L);
+    RdmDevice device ("3", 0x123400000002L);
     Dmx4Linux2Device    dmx4linux2;
     Dmx4Linux2Interface dmx (dmx4linux2);
 

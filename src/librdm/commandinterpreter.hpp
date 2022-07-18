@@ -12,6 +12,22 @@
 #include <string>
 #include <fstream>
 
+//#include <iostream>
+//#include <string>
+
+static std::string trim(const std::string& str,
+			const std::string& whitespace = " \t")
+{
+    const auto strBegin = str.find_first_not_of(whitespace);
+    if (strBegin == std::string::npos)
+        return ""; // no content
+
+    const auto strEnd = str.find_last_not_of(whitespace);
+    const auto strRange = strEnd - strBegin + 1;
+
+    return str.substr(strBegin, strRange);
+}
+
 class CommandParser
 {
 public:
@@ -61,9 +77,10 @@ public:
 
     bool Execute(const char * _command)
 	{
+	    const std::string command = trim(std::string(_command));
 	    Arguments args;
 	    boost::split(args,
-			 _command,
+			 command,
 			 boost::is_any_of(" \t"),
 			 boost::token_compress_on);
 	    return Execute(args);

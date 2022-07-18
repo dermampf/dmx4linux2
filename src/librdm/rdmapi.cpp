@@ -80,6 +80,7 @@ bool RdmFuture::wait() const
 
 
 RdmApi::RdmApi ()
+    : m_verbosity(Wisper)
 {
     m_discoveredDevices = std::vector<Rdm::Uid>(
 	{
@@ -145,7 +146,8 @@ void RdmApi::unmute(const Rdm::Uid & whom)
  * to find existing device.
  */
 std::vector<Rdm::Uid> RdmApi::discoverDevices(const Rdm::Uid & from,
-					      const Rdm::Uid & to)
+					      const Rdm::Uid & to,
+					      const unsigned long maxSearchCount)
 {
     std::vector<Rdm::Uid> discoveredDevices;
 
@@ -154,12 +156,12 @@ std::vector<Rdm::Uid> RdmApi::discoverDevices(const Rdm::Uid & from,
     searchSpace.push_back(UidRange_t(from,to));
 
     static unsigned char buffer[256+2];
-
-    while (searchSpace.size() > 0)
+    unsigned long searchCount = maxSearchCount;
+    while ((searchSpace.size() > 0) && (searchCount-- > 0))
     {
 	UidRange_t a = searchSpace.front();
 	searchSpace.pop_front();
-	
+
 	//-- issue discover request and wait for reply
 	memset(buffer, 0, sizeof(Rdm::Header));
 	Rdm::PacketEncoder e(buffer,sizeof(buffer));
@@ -179,15 +181,17 @@ std::vector<Rdm::Uid> RdmApi::discoverDevices(const Rdm::Uid & from,
 	    {
 		if (f.Source() == Rdm::Uid::broadcast())
 		{
-		    std::cout << std::hex << a.first << ".." << a.second
-			      << " collision -> split" << std::endl;
+		    if (verbosity() >= Loud)
+			std::cout << std::hex << a.first << ".." << a.second
+				  << " collision -> split" << std::endl;
 		    searchSpace.push_back(UidRange_t(a.first, (a.first+a.second)/2-1 ));
 		    searchSpace.push_back(UidRange_t((a.first+a.second)/2, a.second));
 		}
 		else if (f.Source() == Rdm::Uid::any())
 		{
-		    std::cout << std::hex << a.first << ".." << a.second
-			      << " timeout" << std::endl;
+		    if (verbosity() >= Loud)
+			std::cout << std::hex << a.first << ".." << a.second
+				  << " timeout" << std::endl;
 		}
 		else
 		{
@@ -195,13 +199,14 @@ std::vector<Rdm::Uid> RdmApi::discoverDevices(const Rdm::Uid & from,
 		       * mute the device and search again in the
 		       * search space in which we found this item.
 		       */
-		  std::cout << "  found:" << std::hex << f.Source() << std::endl;
+		    if (verbosity() >= Loud)
+			std::cout << "  found:" << std::hex << f.Source() << std::endl;
 		    if (std::find(discoveredDevices.begin(),
 				  discoveredDevices.end(),
 				  Rdm::Uid(f.Source())) == discoveredDevices.end())
 			discoveredDevices.push_back(Rdm::Uid(f.Source()));
 		    mute(Rdm::Uid(f.Source()));
-		      searchSpace.push_back(a);
+		    searchSpace.push_back(a);
 		}
 	    }
 	}
@@ -210,30 +215,39 @@ std::vector<Rdm::Uid> RdmApi::discoverDevices(const Rdm::Uid & from,
 }
 
 
-void RdmApi::startDiscovery(const Rdm::Uid & from, const Rdm::Uid & to)
+void RdmApi::startDiscovery(const Rdm::Uid & from,
+			    const Rdm::Uid & to,
+			    const unsigned long maxSearchCount)
 {
 #if 1
-    m_discoveredDevices = discoverDevices(from, to);
+    m_discoveredDevices = discoverDevices(from,
+					  to,
+					  maxSearchCount);
 #else
     if (m_discoverOngoing)
 	return;
     m_discoverThread.join();
     volatile bool m_discoverOngoing;
     std::thread m_discoverThread;
-    m_discoverThread = std::thread([from,to,&m_discoveredDevices,&m_discoverOngoing]()
-				   {
-				       m_discoverOngoing = true;
-				       m_discoveredDevices = discoverDevices(from, to);
-				       m_discoverOngoing = false;
-				   }
+    m_discoverThread = std::thread(
+	[from,to,maxSearchCount,&m_discoveredDevices,&m_discoverOngoing]()
+	{
+	    m_discoverOngoing = true;
+	    m_discoveredDevices = discoverDevices(from,
+						  to,
+						  maxSearchCount);
+	    m_discoverOngoing = false;
+	}
 	);
 #endif
 }
 
 
-void RdmApi::startDiscovery()
+void RdmApi::startDiscovery(const unsigned long maxSearchCount)
 {
-    startDiscovery(Rdm::Uid(0x000000000001L), Rdm::Uid(0xFFFFFFFFFFFEL));
+    startDiscovery(Rdm::Uid(0x000000000001L),
+		   Rdm::Uid(0xFFFFFFFFFFFEL),
+		   maxSearchCount);
 }
 
 const std::vector<Rdm::Uid> RdmApi::devicesDiscovered() const
@@ -335,4 +349,15 @@ void RdmApi::handle(const IDmxData & _data)
 void RdmApi::addFuture(Rdm::RdmFuture & f)
 {
     m_futures.push_back(&f);
+}
+
+
+RdmApi::Verbosity  RdmApi::verbosity() const
+{
+    return m_verbosity;
+}
+
+void RdmApi::verbosity(const RdmApi::Verbosity value)
+{
+    m_verbosity = value;
 }

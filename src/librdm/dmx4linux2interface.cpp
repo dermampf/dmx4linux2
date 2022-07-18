@@ -35,8 +35,7 @@ void Dmx4Linux2Interface::handle(const IDmxData & f)
 {
     struct timespec ts;
     clock_gettime(CLOCK_MONOTONIC, &ts);
-    std::cout << "Dmx4Linux2Interface::handle(size:" << f.size() << ") t=" << std::dec << (uint64_t(ts.tv_sec)*1000*1000 + ts.tv_nsec/1000) << "us"
-	      << std::endl;
+    // std::cout << "Dmx4Linux2Interface::handle(size:" << f.size() << ") t=" << std::dec << (uint64_t(ts.tv_sec)*1000*1000 + ts.tv_nsec/1000) << "us" << std::endl;
     struct dmx512frame dmxframe;
     memset (&dmxframe, 0, sizeof(dmxframe));
     dmxframe.port = 0;

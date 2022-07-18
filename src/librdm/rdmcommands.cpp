@@ -65,6 +65,8 @@ bool RdmInterpreter::discovery(std::ostream & out, const Arguments & args)
 {
     if (args.size() == 3)
 	m_rdm.startDiscovery(Rdm::Uid(args[1]), Rdm::Uid(args[2]));
+    else if (args.size() == 2)
+	m_rdm.startDiscovery(Rdm::Uid(args[1]), Rdm::Uid(args[1]), 1);
     else
 	m_rdm.startDiscovery();
     return true;
@@ -153,25 +155,24 @@ bool RdmInterpreter::test(std::ostream & out, const Arguments & args)
 	const int numberIterations = strtol(args[1].c_str(), 0, 0);
 	for (int i = 0; i < numberIterations; ++i)
 	{
-	    printf ("discover\n");
+	  //  printf ("discover\n");
 	    m_rdm.startDiscovery();
 
 	    usleep(100*1000);
 
-	    printf ("list\n");
+	   // printf ("list\n");
 	    const std::vector<Rdm::Uid> d = m_rdm.devicesDiscovered();
 	    for (auto a : d)
 	    {
-		out << std::hex << uint64_t(a)
-		    << std::endl;
+		out << std::hex << uint64_t(a) << " ";
 	    }
+	    out << std::endl;
 
 	    usleep(100*1000);
 
-	    printf ("unmute all\n");
+	   // printf ("unmute all\n");
 	    m_rdm.unmute(Rdm::Uid::broadcast());
 	    usleep(100*1000);
-
 	}
     }
     return true;

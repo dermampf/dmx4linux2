@@ -96,8 +96,8 @@ int RdmDevice::dmx512Address() const
 
 void RdmDevice::sendReply(const IDmxData & f)
 {
-    std::cout << "RDM-Reply:" << std::endl;
-    dump(f.data(), f.size());
+    // std::cout << "RDM-Reply:" << std::endl;
+    // dump(f.data(), f.size());
     handleTx(f);
 }
 
@@ -107,7 +107,7 @@ void RdmDevice::handle(const IDmxData & f)
     unsigned char buffer[256];
     memset(buffer, 0, sizeof(Rdm::Header));
 
-#if 1
+#if 0
     std::cout << "-----------------------------------" << std::endl;
     std::cout << "RDM-Frame-RX:" << std::endl;
     dump(f.data(), f.size());
@@ -129,22 +129,22 @@ void RdmDevice::handle(const IDmxData & f)
 		switch (rdm.Pid())
 		{
 		case Rdm::DISC_UNIQUE_BRANCH:
-		    std::cerr << "DiscoveryRequest::DISC_UNIQUE_BRANCH" << std::endl;
+		    // std::cerr << "DiscoveryRequest::DISC_UNIQUE_BRANCH" << std::endl;
 		    if (!m.muted)
 		    {
 			uint64_t from;
 			uint64_t to;
 			if (!rdm.PdAt(0, from, 6) || !rdm.PdAt(6, to, 6))
 			    return;
-
+#if 0
 			std::cerr << "  search = {"
 				  << std::hex << from << ".." << to
 				  << "} my:" << myUid()
 				  << std::endl;
-
+#endif
 			if ((myUid() >= from) && (myUid() <= to))
 			{
-			    std::cerr << "    -> do reply " << std::endl;
+			    // std::cerr << "    -> do reply " << std::endl;
 			    const int size = Rdm::PacketEncoder(buffer,sizeof(buffer))
 				.Source(myUid())
 				.Destination(rdm.Source())
@@ -155,12 +155,14 @@ void RdmDevice::handle(const IDmxData & f)
 			    sendReply(ConstDmxData((const void *)&buffer, size));
 			}
 		    }
+#if 0
 		    else
 			std::cerr << "  " << myUid() << " is muted" << std::endl;
+#endif
 		    break;
 
 		case Rdm::DISC_MUTE:
-		    std::cerr << "DiscoveryRequest::DISC_MUTE" << std::endl;
+		    // std::cerr << "DiscoveryRequest::DISC_MUTE" << std::endl;
 		    m.muted = true;
 		    if (rdm.Destination() != Rdm::Uid::broadcast())
 		    {
@@ -176,7 +178,7 @@ void RdmDevice::handle(const IDmxData & f)
 		    break;
 
 		case Rdm::DISC_UN_MUTE:
-		    std::cerr << "DiscoveryRequest::DISC_UN_MUTE" << std::endl;
+		    // std::cerr << "DiscoveryRequest::DISC_UN_MUTE" << std::endl;
 		    m.muted = false;
 		    if (rdm.Destination() != Rdm::Uid::broadcast())
 		    {
@@ -220,6 +222,7 @@ void RdmDevice::handle(const IDmxData & f)
 		    switch (rdm.Pid())
 		    {
 		    case Rdm::DEVICE_INFO:
+			std::cerr << "Get DEVICE_INFO" << std::endl;
 			e   .addPd(uint16_t(0x100)) // RDM Protocol Version
 			    .addPd(uint16_t(m.deviceModelId)) // Device Model ID
 			    .addPd(uint16_t(m.productCategory)) // Product Category
@@ -232,14 +235,17 @@ void RdmDevice::handle(const IDmxData & f)
 			break;
 
 		    case Rdm::SOFTWARE_VERSION_LABEL:
+			std::cerr << "Get SOFTWARE_VERSION_LABEL" << std::endl;
 			e.addPd("V1.0.0");
 			break;
 
 		    case Rdm::DMX_START_ADDRESS:
+			std::cerr << "Get DMX_START_ADDRESS" << std::endl;
 			e.addPd(uint16_t(m.dmxAddress));
 			break;
 
 		    case Rdm::IDENTIFY_DEVICE:
+			std::cerr << "Get IDENTIFY_DEVICE" << std::endl;
 			e.addPd(uint8_t(m.identifyOn));
 			break;
 
@@ -266,16 +272,19 @@ void RdmDevice::handle(const IDmxData & f)
 		    switch (rdm.Pid())
 		    {
 		    case Rdm::DMX_START_ADDRESS:
+			std::cerr << "Set DMX_START_ADDRESS" << std::endl;
 			if (rdm.PdAt(0, m.dmxAddress))
 			  std::cout << "new StartAddress = " << m.dmxAddress << std::endl;
 			break;
 
 		    case Rdm::IDENTIFY_DEVICE:
+			std::cerr << "Set IDENTIFY_DEVICE" << std::endl;
 			if (rdm.PdAt(0, m.identifyOn))
 			    std::cout << "Identify:" << m.identifyOn << std::endl;
 			break;
 
 		    case 0xFEED: // set UID
+			std::cerr << "Set 0xFEED" << std::endl;
 		        {
 			    uint64_t newUid = 0;
 			    if (rdm.PdAt(0, newUid, 6))
