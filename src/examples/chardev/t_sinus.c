@@ -26,12 +26,13 @@ int main (int argc, char **argv)
     if (dmxfd < 0)
 	return 1;
 
+    const int slotcount = 10; // 512
     struct dmx512frame frame;
     bzero(&frame, sizeof(frame));
     frame.port = (argc > 2) ? atoi(argv[2]) : 0;
     frame.breaksize = 0; // default
     frame.startcode = 0;
-    frame.payload_size = 512;
+    frame.payload_size = slotcount;
     memset (frame.payload, 0, 512); // all lamps on
 
     const double stretchingFactor = (argc > 3) ? atof(argv[3]) : 0.2;
@@ -44,7 +45,7 @@ int main (int argc, char **argv)
 
 	usleep(1000*33);
 
-	for (int i=0; i < 512; ++i)
+	for (int i=0; i < slotcount; ++i)
 	{
 	    frame.payload[i] = max(0, (int)(sin(dmxframe*speedFactor + i*stretchingFactor) * 255.01));
 	}
