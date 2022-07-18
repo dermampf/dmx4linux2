@@ -25,11 +25,21 @@ int main (int argc , char **argv)
 	struct dmx512frame frame;
 	bzero(&frame, sizeof(frame));
 	int n = read (dmxfd, &frame, sizeof(frame));
-	printf ("[%d]\n", count++);
-	printf (" port:%d\n", frame.port);
-	printf (" breaksize:%d\n", frame.breaksize);
-	printf (" startcode:%d\n", frame.startcode);
-	printf (" #slots:%d\n", frame.payload_size);
+        if (n < 0)
+        {
+          perror("read");
+          continue;
+        }
+        printf ("[%d]\n", count++);
+        printf (" port:%d\n", frame.port);
+        printf (" breaksize:%d\n", frame.breaksize);
+        printf (" startcode:%d\n", frame.startcode);
+        printf (" #slots:%d\n", frame.payload_size);
+        printf ("  slots:");
+        int i;
+        for (i = 0; i < 10 && i < frame.payload_size; ++i)
+          printf (" %02X", frame.payload[i]);
+        printf ("\n");
     }
     close(dmxfd);
     return 0;

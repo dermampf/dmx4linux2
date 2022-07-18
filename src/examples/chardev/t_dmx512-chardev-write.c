@@ -23,18 +23,28 @@ int main (int argc, char **argv)
     if (dmxfd < 0)
 	return 1;
     const int count = (argc > 2) ? atoi(argv[2]) : 10;
+    const int portno = (argc > 3) ? atoi(argv[3]) : 1;
+    const int slotcount = (argc > 4) ? atoi(argv[4]) : 512;
 
     int i;
     for (i = 0; i < count; ++i)
     {
 	struct dmx512frame frame;
 	bzero(&frame, sizeof(frame));
-	frame.port = (argc > 3) ? atoi(argv[3]) : 1;
+	frame.port = portno;
 	frame.breaksize = 0; // default
 	frame.startcode = 0;
-	frame.payload_size = 512;
-	memset (frame.payload, 0xff, 512); // all lamps on
+	frame.payload_size = slotcount;
+	//memset (frame.payload, 0xff, 512); // all lamps on
+        int j;
+        for (j = 0; j < 512; ++j)
+          frame.payload[j] = (unsigned char)(j+1);
 	write (dmxfd, &frame, sizeof(frame));
+	printf ("wrote frame @ %s:%d #slots %d\n",
+		card_name,
+		portno,
+		slotcount);
+	usleep(33*1000);
     }
 
     close(dmxfd);
