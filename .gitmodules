@@ -4,3 +4,6 @@
 [submodule "src/3rdparty/kfifo"]
 	path = src/3rdparty/kfifo
 	url = https://github.com/liigo/kfifo.git
+[submodule "src/3rdparty/c-pthread-queue"]
+	path = src/3rdparty/c-pthread-queue
+	url = https://github.com/seifzadeh/c-pthread-queue.git
