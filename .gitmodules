@@ -1,3 +1,6 @@
 [submodule "src/simulation/hardware-model/3rdparty/uart16550"]
 	path = src/simulation/hardware-model/3rdparty/uart16550
 	url = https://github.com/freecores/uart16550.git
+[submodule "src/3rdparty/kfifo"]
+	path = src/3rdparty/kfifo
+	url = https://github.com/liigo/kfifo.git
