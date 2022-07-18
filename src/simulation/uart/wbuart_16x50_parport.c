@@ -1,3 +1,6 @@
+/* See:
+ * https://www.kernel.org/doc/html/latest/driver-api/parport-lowlevel.html
+ */
 
 #include "wbuart_16x50.h"
 
