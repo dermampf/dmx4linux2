@@ -9,12 +9,15 @@ LDLIBS+=-lpthread
 CFLAGS+=-Ihardware-model/
 LDLIBS+=-Lhardware-model/ -lhardware_model
 
+CFLAGS+=-I../include/
+CFLAGS+=-I../cuse-drivers/
+
 CFLAGS+=-g -ggdb
 
 OBJ=obj-x86
 
 
-all : $(OBJ) $(OBJ)/t_suart $(OBJ)/t_suart_uio $(OBJ)/t_suart_parport
+all : $(OBJ) $(OBJ)/t_suart $(OBJ)/t_suart_uio $(OBJ)/t_suart_parport $(OBJ)/dmx512_cuse_suart
 
 
 
@@ -29,6 +32,16 @@ SUART_CORE_OBJS= \
 	$(OBJ)/pc16cx50.o \
 	$(OBJ)/dmx_device.o
 
+
+
+
+$(OBJ)/dmx512_cuse_suart : \
+	$(OBJ)/dmx512_cuse_suart.o \
+	$(OBJ)/dmx512_cuse_dev.o \
+	$(OBJ)/dmx512_suart.o \
+	$(SUART_CORE_OBJS) \
+	$(OBJ)/wbuart_16x50.o
+	$(CC) $(CFLAGS) -o $@ $^ $(LDLIBS) -lfuse
 
 $(OBJ)/t_suart : \
 	$(OBJ)/t_dmx512_suart.o \
@@ -81,4 +94,7 @@ $(OBJ)/%.o : uart/%.c
 	$(CC) $(CFLAGS) -c -o $@ $<
 
 $(OBJ)/%.o : suart/%.c
+	$(CC) $(CFLAGS) -c -o $@ $<
+
+$(OBJ)/%.o : ../cuse-drivers/%.c
 	$(CC) $(CFLAGS) -c -o $@ $<
