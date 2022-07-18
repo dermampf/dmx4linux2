@@ -10,8 +10,10 @@ typedef unsigned short u16;
 typedef unsigned char  u8;
 
 #include <unistd.h>
+#include "kern_levels.h"
 
-#define printk printf
+int printk(const char * fmt, ...);
+void set_loglevel(const int);
 
 #undef offsetof
 #ifdef __compiler_offsetof

@@ -284,7 +284,7 @@ static void __posix_timer_thread_handler(sigval_t arg)
 {
 	struct dmx512_uart_port * port = (struct dmx512_uart_port *)arg.sival_ptr;
 	port->rdm_timer.callTimeoutHandler = 1;
-	//printf ("#### posix timeout handler called\n");
+	printk (KERN_DEBUG"#### posix timeout handler called\n");
 }
 
 static void dmx512rtuart_start_rdm_timer(struct dmx512_uart_port * port,
@@ -301,7 +301,7 @@ static void dmx512rtuart_start_rdm_timer(struct dmx512_uart_port * port,
 					  &port->rdm_timer.id);
 		if (status == -1)
 		{
-			printf ("failed to create timer\n");
+			printk (KERN_ERR"failed to create timer\n");
 			return;
 		}
 		port->rdm_timer.active = 1;
@@ -317,7 +317,7 @@ static void dmx512rtuart_start_rdm_timer(struct dmx512_uart_port * port,
 	status = timer_settime(port->rdm_timer.id, 0, &port->rdm_timer.ts, 0);
 	if (status == -1)
 	{
-		printf ("failed to adjust timer\n");
+		printk (KERN_ERR"failed to adjust timer\n");
 	}
 }
 
@@ -335,7 +335,7 @@ static struct dmx512_framequeue_entry * rdm_discovery_reply_collision(struct dmx
 {
 	if (f)
 	{
-		// printf ("rdm_discovery_reply_collision   payload_size:%d\n", f->frame.payload_size);
+		// printk (KERN_DEBUG"rdm_discovery_reply_collision   payload_size:%d\n", f->frame.payload_size);
 		memcpy (&f->frame.data[RDM_POS_DEST_UID],
 			&f->frame.data[RDM_POS_SRC_UID],
 			6);
@@ -352,7 +352,7 @@ static struct dmx512_framequeue_entry * rdm_discovery_reply_timeout(struct dmx51
 {
 	if (f)
 	{
-		// printf ("rdm_discovery_reply_timeout   payload_size:%d\n", f->frame.payload_size);
+		// printk (KERN_DEBUG"rdm_discovery_reply_timeout   payload_size:%d\n", f->frame.payload_size);
 		memcpy (&f->frame.data[RDM_POS_DEST_UID],
 			&f->frame.data[RDM_POS_SRC_UID],
 			6);
@@ -450,7 +450,7 @@ static int dmx512rtuart_complete_rdm_discovery_reply(struct dmx512_framequeue_en
 	const u16 calccrc = dmx512frame_calculate_rdm_checksum(data, 12);
 	u16 crc = ((u16)(data[12] & data[13])<<8) + (data[14] & data[15]);
 #ifdef DMX512_DEBUG_RX_DATA
-	printf ("crc:%04X, %04X\n", calccrc, crc);
+	printk (KERN_DEBUG"crc:%04X, %04X\n", calccrc, crc);
 #endif
 	if (calccrc != crc)
 		return -1;
@@ -545,7 +545,7 @@ static int dmx512rtuart_transmitter_has_space(struct rtuart *uart, const int spa
 		dmx512_put_frame(&port->dmx, dmx512rtuart_checkout_tx_frame(port));
 		return 0;
 	}
-	printf ("dmx512rtuart_transmitter_has_space:\n  state=%s\n  remain:%d \n",
+	printk (KERN_DEBUG"dmx512rtuart_transmitter_has_space:\n  state=%s\n  remain:%d \n",
 		statename(port->state),
 		port->tx.remain
 		);
@@ -554,10 +554,10 @@ static int dmx512rtuart_transmitter_has_space(struct rtuart *uart, const int spa
 	  return 0;
 
 	if (port->state != PORT_STATE_TRANSMIT_DATA) {
-		printf("transmitter_has_space with tx-frame and\n   no PORT_STATE_TRANSMIT_DATA 0x%03X\n",
+		printk(KERN_DEBUG"transmitter_has_space with tx-frame and\n   no PORT_STATE_TRANSMIT_DATA 0x%03X\n",
 		       port->state);
-		printf ("   tx.remain:%lu", port->tx.remain);
-		printf ("   written:%ld", port->tx.ptr - port->tx.frame->frame.data );
+		printk (KERN_DEBUG"   tx.remain:%lu", port->tx.remain);
+		printk (KERN_DEBUG"   written:%ld", port->tx.ptr - port->tx.frame->frame.data );
 	}
 
 	if (port->tx.remain > 0)
@@ -598,7 +598,7 @@ static void dmx512rtuart_handle_rdm_timeout(struct dmx512_uart_port * port)
 	{
 	case PORT_STATE_RDMDISC_RECV_PREAMBLE:
 	case PORT_STATE_RDMDISC_RECV_DATA:
-		//printf ("dmx512rtuart_handle_rdm_timeout(%p)\n %s\n", port, statename(port->state));
+		//printk (KERN_DEBUG"dmx512rtuart_handle_rdm_timeout(%p)\n %s\n", port, statename(port->state));
 
 		dmx512rtuart_stop_rdm_timer(port);
 
@@ -618,23 +618,23 @@ static void dmx512rtuart_handle_rdm_timeout(struct dmx512_uart_port * port)
 
 	case PORT_STATE_EXPECT_RDM_FRAME:
 		/* no answer */
-		//printf ("dmx512rtuart_handle_rdm_timeout(%p)\n  PORT_STATE_EXPECT_RDM_FRAME %p\n", port, port->tx.frame);
+		//printk (KERN_DEBUG"dmx512rtuart_handle_rdm_timeout(%p)\n  PORT_STATE_EXPECT_RDM_FRAME %p\n", port, port->tx.frame);
 		dmx512_put_frame(&port->dmx, dmx512rtuart_checkout_rx_frame(port));
 		// TODO: fill in reply data that shows a timeout
 		dmx512_received_frame(&port->dmx, update_rdm_checksum(dmx512rtuart_checkout_tx_frame(port)));
-		//printf ("reply rdm timeout frame\n");
+		//printk (KERN_DEBUG"reply rdm timeout frame\n");
 		break;
 
 	case PORT_STATE_RECEIVE_RDMDATA:
 		/* we have at least a break, so data is damaged */
-		//printf ("dmx512rtuart_handle_rdm_timeout(%p)\n  PORT_STATE_EXPECT_RDM_FRAME %p\n", port, port->tx.frame);
+		//printk (KERN_DEBUG"dmx512rtuart_handle_rdm_timeout(%p)\n  PORT_STATE_EXPECT_RDM_FRAME %p\n", port, port->tx.frame);
 		dmx512_put_frame(&port->dmx, dmx512rtuart_checkout_rx_frame(port));
 		// TODO: fill in reply data that shows a damaged reply (like crc error).
 		dmx512_received_frame(&port->dmx, update_rdm_checksum(dmx512rtuart_checkout_tx_frame(port)));
 		break;
 		
 	default:
-		printf ("dmx512rtuart_handle_rdm_timeout(%p)\n  unhandled state:%d\n",
+		printk (KERN_ERR"dmx512rtuart_handle_rdm_timeout(%p)\n  unhandled state:%d\n",
 			port,
 			port->state);
 		// TODO: should not happen, write a note and delete timer.
@@ -646,14 +646,24 @@ static int dmx512rtuart_transmitter_empty(struct rtuart *uart)
 {
 	struct dmx512_uart_port * port = rtuart_to_dmx512_uart_port(uart);
 
-	printf ("dmx512rtuart_transmitter_empty: state=%s  remain:%d \n",
+	printk (KERN_DEBUG"dmx512rtuart_transmitter_empty: state=%s  remain:%d \n",
 		statename(port->state),
 		port->tx.remain
 		);
 
+        printf ("TXempty %d/%s\n", port->state, statename(port->state));
+        if (port->state == PORT_STATE_TRANSMIT_BREAK)
+        {
+                uart_disable_notification(uart, UART_NOTIFY_TXEMPTY);
+                rtuart_set_baudrate(uart, 250000);
+                next_state(port, PORT_STATE_TRANSMIT_DATA);
+                uart_enable_notification(uart, UART_NOTIFY_TXREADY);
+                return 0;
+        }
+
 	if (port->state != PORT_STATE_WAIT_FOR_TX_COMPLETE)
 	  {
-		printf("transmitter_empty and not in PORT_STATE_WAIT_FOR_TX_COMPLETE\n");
+		printk(KERN_WARNING"transmitter_empty and not in PORT_STATE_WAIT_FOR_TX_COMPLETE\n");
 		return 0;
 	  }
 
@@ -663,7 +673,7 @@ static int dmx512rtuart_transmitter_empty(struct rtuart *uart)
 	/* flush the fifo when we switch back to receive data, as there may be
 	 * garbage or data we transmitted in the receive fifo - half duplex
 	 */
-	//printf ("flush receiver fifo as tx is complete\n");
+	//printk (KERN_DEBUG"flush receiver fifo as tx is complete\n");
 	rtuart_flush_fifo (uart, 0, 1); // uart_flush_rxfifo(uart);
 
 	//TODO:check if notify makes sense
@@ -671,10 +681,10 @@ static int dmx512rtuart_transmitter_empty(struct rtuart *uart)
 
 	if (port->tx.frame && (port->tx.frame->frame.flags & DMX512_FLAG_IS_RDM))
 	{
-		//printf ("RDM");
+		//printk (KERN_DEBUG"RDM");
 		if (port->tx.frame->frame.flags & DMX512_FLAG_IS_RDM_DISC)
 		{
-			//printf (" Discovery\n");
+			//printk (KERN_CONT" Discovery\n");
 			port->rx.frame = dmx512_get_frame(&port->dmx);
 			if (port->rx.frame)
 			{
@@ -683,16 +693,16 @@ static int dmx512rtuart_transmitter_empty(struct rtuart *uart)
 				port->rx.expected_slots_count = 0;
 				port->rx.data = &port->rx.frame->frame.data[256];
 				port->rx.count = 0;
-				//printlog("start rdm-disc reply\n");
+				//printk(KERN_DEBUG"start rdm-disc reply\n");
 				dmx512rtuart_start_rdm_timer(port, DISCOVERY_REQUEST_REPLY_TIMEOUT);
 				uart_enable_notification(uart, UART_NOTIFY_RXAVAILABLE);
 				return 0;
 			}
-			// else printf (" (no rx-frame)");
+			// else printk (KERN_CONT" (no rx-frame)");
 		}
 		else
 		{
-			//printf (" Frame\n");
+			//printk (KERN_CONT" Frame\n");
 			/* an RDM frame can not be more than 256 bytes in size.
 			 * The size field will be updated once the real size is known.
 			 */
@@ -700,10 +710,10 @@ static int dmx512rtuart_transmitter_empty(struct rtuart *uart)
 			//next_state(port, PORT_STATE_RECEIVE_RDMDATA);
 			next_state(port, PORT_STATE_EXPECT_RDM_FRAME);
 			dmx512rtuart_start_rdm_timer(port, TIMEOUT_RDM_EOP_TO_SOP);
-			//printlog("start rdm-frame reply\n");
+			//printk("start rdm-frame reply\n");
 			return 0;
 		}
-		//printf ("RDM\n");
+		//printk (KERN_CONT"RDM\n");
 	}
 	dmx512_put_frame(&port->dmx, dmx512rtuart_checkout_tx_frame(port));
 	next_state(port, PORT_STATE_IDLE);
@@ -735,7 +745,7 @@ static void dmx512_check_received_data(struct dmx512_uart_port * port,
 		if (/* is_between(0, start_pos, start_pos+size) */
 		    (start_pos == 0) && (size > 0))
 		{
-			//printf ("RX: check startcode (0x%02X)\n", data[0]);
+			//printk (KERN_DEBUG"RX: check startcode (0x%02X)\n", data[0]);
 			/* this is an RDM frame */
 			if (data[0] == SC_RDM)
 				port->rx.frame->frame.flags |= DMX512_FLAG_IS_RDM;
@@ -800,7 +810,7 @@ static int dmx512rtuart_receiver_data_available(struct rtuart * uart, const int 
 	if ((port->state >= PORT_STATE_FIRST_TXSTATE) &&
 	    (port->state < PORT_STATE_LAST_TXSTATE))
 	{
-		// printf ("## dmx512rtuart_receiver_data_available called in state %s\n", statename(port->state));
+		// printk (KERN_WARNING"## dmx512rtuart_receiver_data_available called in state %s\n", statename(port->state));
 		return 0;
 	}
 
@@ -821,7 +831,7 @@ static int dmx512rtuart_receiver_data_available(struct rtuart * uart, const int 
 		{
 			if (port->rx.data == 0)
 			{
-				printf ("FATAL: NO DATA BUFFER  frame:%p  %s\n", port->rx.frame, statename(port->state));
+				printk (KERN_ERR"FATAL: NO DATA BUFFER  frame:%p  %s\n", port->rx.frame, statename(port->state));
 				exit(1);
 			}
 
@@ -837,13 +847,13 @@ static int dmx512rtuart_receiver_data_available(struct rtuart * uart, const int 
 
 				if ((port->rx.count >= max_size) && port->rx.frame)
 				{
-					printf ("flush old frame(rx.count>=max_size{%d}): %02X %02X %02X\n",
+					printk (KERN_DEBUG"flush old frame(rx.count>=max_size{%d}): %02X %02X %02X\n",
 						max_size,
 						port->rx.frame->frame.data[0],
 						port->rx.frame->frame.data[1],
 						port->rx.frame->frame.data[2]);
 
-					// printf ("rx-frame-completed tx:%p count:%lu\n", port->tx.frame, port->rx.count);
+					// printk (KERN_DEBUG"rx-frame-completed tx:%p count:%lu\n", port->tx.frame, port->rx.count);
 
 					if (port->tx.frame && (port->tx.frame->frame.flags & DMX512_FLAG_IS_RDM))
 						dmx512rtuart_stop_rdm_timer(port);
@@ -861,7 +871,7 @@ static int dmx512rtuart_receiver_data_available(struct rtuart * uart, const int 
 		break;
 
 	case PORT_STATE_RDMDISC_RECV_PREAMBLE:
-		//printlog("SOP rdm-disc reply\n");
+		//printk(KERN_DEBUG"SOP rdm-disc reply\n");
 		dmx512rtuart_stop_rdm_timer(port);
 
 		// we expect all rdm discovery reply data to be received then
@@ -875,10 +885,10 @@ static int dmx512rtuart_receiver_data_available(struct rtuart * uart, const int 
 #ifdef DMX512_DEBUG_RX_DATA
 				{
 					int i;
-					printf ("rx:[%d,%d]:", _count, count);
+					printk (KERN_DEBUG"rx:[%d,%d]:", _count, count);
 					for (i = 0; i < count; ++i)
-						printf (" %02X", port->rx.data[i]);
-					printf (" expect:%d cnt:%d\n", port->rx.expected_slots_count, port->rx.count);
+						printk (KERN_CONT" %02X", port->rx.data[i]);
+					printk (KERN_CONT" expect:%d cnt:%d\n", port->rx.expected_slots_count, port->rx.count);
 				}
 #endif
 				if (port->state == PORT_STATE_RDMDISC_RECV_PREAMBLE)
@@ -887,7 +897,7 @@ static int dmx512rtuart_receiver_data_available(struct rtuart * uart, const int 
 					const int p = dmx512rtuart_find_preamble(port->rx.data, ret);
 					if (p == -2) // collision
 					{
-						// printf ("Collision(preamble)\n");
+						// printk (KERN_DEBUG"Collision(preamble)\n");
 						dmx512rtuart_stop_rdm_timer(port);
 						dmx512_put_frame(&port->dmx, dmx512rtuart_checkout_rx_frame(port));
 
@@ -917,7 +927,7 @@ static int dmx512rtuart_receiver_data_available(struct rtuart * uart, const int 
 					const int max_size = port->rx.expected_slots_count + 1;
 					if ((port->rx.count >= max_size) && port->rx.frame)
 					{
-						// printf ("DISCOVERY COMPLETE\n");
+						// printk (KERN_DEBUG"DISCOVERY COMPLETE\n");
 						dmx512rtuart_stop_rdm_timer(port);
 
 						struct dmx512_framequeue_entry * rxframe = dmx512rtuart_checkout_rx_frame(
@@ -955,7 +965,7 @@ port);
 static int dmx512rtuart_modem_input_changed(struct rtuart * uart, const unsigned long values, const unsigned long change)
 {
 	(void)uart;
-	//printk("input changed change:%02lX value:%02lX\n", change, values);
+	//printk(KERN_DEBUG"input changed change:%02lX value:%02lX\n", change, values);
 }
 
 static int dmx512rtuart_line_status_event(struct rtuart * uart, const unsigned long eventmask)
@@ -965,20 +975,20 @@ static int dmx512rtuart_line_status_event(struct rtuart * uart, const unsigned l
 	if ((port->state >= PORT_STATE_FIRST_TXSTATE) &&
 	    (port->state < PORT_STATE_LAST_TXSTATE))
 	{
-		// printf ("## dmx512rtuart_line_status_event called in state %s\n", statename(port->state));
+		// printk (KERN_DEBUG"## dmx512rtuart_line_status_event called in state %s\n", statename(port->state));
 		// uart_enable_notification(uart, UART_NOTIFY_LINEEVENT);
 		return 0;
 	}
 
 	if (eventmask & RTUART_EVENT_BREAK)
 	{
-		printf ("--------- Received Break ------------\n");
+		printk (KERN_DEBUG"--------- Received Break ------------\n");
 		// TODO: check if this makes sense here.
 		if ((port->state <= PORT_STATE_RECEIVE_DMXDATA) &&
 		    port->rx.frame)
 		{
 			if (port->state != PORT_STATE_EXPECT_STARTCODE) {
-				printf ("flush old frame(break): %02X %02X %02X\n",
+				printk (KERN_DEBUG"flush old frame(break): %02X %02X %02X\n",
 					port->rx.frame->frame.data[0],
 					port->rx.frame->frame.data[1],
 					port->rx.frame->frame.data[2]);
@@ -996,7 +1006,7 @@ static int dmx512rtuart_line_status_event(struct rtuart * uart, const unsigned l
 		case PORT_STATE_EXPECT_RDM_FRAME:
 			if (port->state == PORT_STATE_EXPECT_RDM_FRAME)
 			{
-				//printlog("SOP rdm-frame reply\n");
+				//printk(KERN_DEBUG"SOP rdm-frame reply\n");
 				dmx512rtuart_stop_rdm_timer(port);
 				/* restart the timer, as the frame can time out. */
 				dmx512rtuart_start_rdm_timer(port, TIMEOUT_RDM_SOP_TO_EOP);
@@ -1011,7 +1021,7 @@ static int dmx512rtuart_line_status_event(struct rtuart * uart, const unsigned l
 
 				if (port->state == PORT_STATE_EXPECT_RDM_FRAME)
 				{
-					// printf ("received RDM-Reply break\n");
+					// printk (KERN_DEBUG"received RDM-Reply break\n");
 					port->rx.expected_slots_count = 256;
 					next_state(port, PORT_STATE_RECEIVE_RDMDATA);
 				}
@@ -1030,7 +1040,7 @@ static int dmx512rtuart_line_status_event(struct rtuart * uart, const unsigned l
 			 */
 		case PORT_STATE_EXPECT_STARTCODE:
 			if (port->rx.frame) {
-				printf ("--> reuse frame.");
+				printk (KERN_DEBUG"--> reuse frame.");
 				port->rx.data = port->rx.frame->frame.data;
 				port->rx.count = 0;
 			}
@@ -1039,14 +1049,14 @@ static int dmx512rtuart_line_status_event(struct rtuart * uart, const unsigned l
 		case PORT_STATE_RDMDISC_RECV_PREAMBLE:
 		case PORT_STATE_RDMDISC_RECV_DATA:
 			//TODO: handle this a a collision
-			printf ("break: PORT_STATE_RDMDISC_RECV_* => collision\n");
+			printk (KERN_DEBUG"break: PORT_STATE_RDMDISC_RECV_* => collision\n");
 			break;
 
 		case PORT_STATE_TRANSMIT_BREAK:
 			/* this is the break we transmitted. */
 			break;
 		default:
-			printf ("Unhandled state for BREAK:%d\n", port->state);
+			printk (KERN_DEBUG"Unhandled state for BREAK:%d\n", port->state);
 			break;
 		}
 	}
@@ -1066,7 +1076,7 @@ static const struct rtuart_client_callbacks dmx512rtuart_callbacks =
 
 static int dmx512_rtuart_client_send_frame (struct dmx512_port * dmxport, struct dmx512_framequeue_entry * frame)
 {
-	// printf ("dmx512_rtuart_client_send_frame\n");
+	// printk (KERN_DEBUG"dmx512_rtuart_client_send_frame\n");
 
 	//struct dmx512_uart_port * rtuart_to_dmx512_uart_port(struct rtuart *uart);
 
@@ -1079,7 +1089,7 @@ static int dmx512_rtuart_client_send_frame (struct dmx512_port * dmxport, struct
 	 */
 	if (port->rx.frame)
 	{
-		printf ("flush old frame(send_frame): %02X %02X %02X\n",
+		printk (KERN_DEBUG"flush old frame(send_frame): %02X %02X %02X\n",
 			port->rx.frame->frame.data[0],
 			port->rx.frame->frame.data[1],
 			port->rx.frame->frame.data[2]);
@@ -1106,18 +1116,18 @@ static int dmx512_rtuart_client_send_frame (struct dmx512_port * dmxport, struct
 		// dump_dmx512_frame(port->tx.frame, "send ");
 		if (dmx512frame_is_rdm(port->tx.ptr, port->tx.remain))
 		{
-			// printf ("TX RDM %d", dmx512frame_is_rdm_discover(port->tx.ptr, port->tx.remain));
+			// printk (KERN_DEBUG"TX RDM %d", dmx512frame_is_rdm_discover(port->tx.ptr, port->tx.remain));
 			port->tx.frame->frame.flags |= DMX512_FLAG_IS_RDM;
 			if (dmx512frame_is_rdm_discover(port->tx.ptr, port->tx.remain))
 			{
 				port->tx.frame->frame.flags |= DMX512_FLAG_IS_RDM_DISC;
-				// printf (" Discovery");
+				// printk (KERN_CONT" Discovery");
 			}
 #if 1
 			else if (dmx512frame_is_rdm_discover_reply(port->tx.ptr, port->tx.remain)) {
 				u16 checksum = 0;
-				printf ("!! sending discovery reply(1): %lu, %p, %d\n",
-					(size_t)(port->tx.ptr-port->tx.frame->frame.data),
+				printk (KERN_DEBUG"!! sending discovery reply(1): %lu, %p, %d\n",
+					  (size_t)(port->tx.ptr-port->tx.frame->frame.data),
 					port->tx.ptr,
 					port->tx.remain
 					);
@@ -1149,14 +1159,14 @@ static int dmx512_rtuart_client_send_frame (struct dmx512_port * dmxport, struct
 				port->tx.ptr += 256;
 				port->tx.remain = 24;
 				frame->frame.flags |= DMX512_FLAG_NOBREAK;
-				printf ("!! sending discovery reply(2): %lu, %p, %d\n",
+				printk (KERN_DEBUG"!! sending discovery reply(2): %lu, %p, %d\n",
 					(size_t)(port->tx.ptr-port->tx.frame->frame.data),
 					port->tx.ptr,
 					port->tx.remain
 					);
 			}
 #endif
-			// printf ("\n");
+			// printk (KERN:CONT"\n");
 		}
 
 		const int min_break_time_us = 176;
@@ -1205,7 +1215,7 @@ static void dmx512_rtuart_start(struct dmx512_uart_port * port)
 // @dir Changes the direction of the RS485 transceiver 1 = output, 0 = input
 void dmx512_rtuart_client_enable_rs485_transmitter(struct dmx512_uart_port * port, const int on)
 {
-	// printf ("enable_rs485_transmitter: %s\n", on ? "Output" : "Input");
+	// printk (KERN_DEBUG"enable_rs485_transmitter: %s\n", on ? "Output" : "Input");
 	rtuart_set_modem_lines(port->uart,
 			       RTUART_OUTPUT_RTS,
 			       on ? 0 : RTUART_OUTPUT_RTS);
@@ -1246,8 +1256,8 @@ void dmx512_rtuart_periodical(struct rtuart * uart)
 {
 	struct dmx512_uart_port * port = rtuart_to_dmx512_uart_port(uart);
 	if (port->rdm_timer.callTimeoutHandler) {
-		//printf ("dmx512_rtuart_periodical do work\n");
+		//printk (KERN_DEBUG"dmx512_rtuart_periodical do work\n");
 		port->rdm_timer.callTimeoutHandler = 0;
-		dmx512rtuart_handle_rdm_timeout(port);
+		//dmx512rtuart_handle_rdm_timeout(port);
 	}
 }

@@ -239,7 +239,7 @@ static int pl011_get_baudrate(struct rtuart *u, unsigned int * baudrate)
 
 static int pl011_set_break(struct rtuart *u, const int on)
 {
-	printf ("#### pl011_set_break %d\n", on);
+	printk (KERN_DEBUG"#### pl011_set_break %d\n", on);
 //DONE
 	u32 lcrh;
 	rtuart_read_u32(u, PL011_REG_LCRH, &lcrh);
@@ -292,7 +292,7 @@ static int pl011_set_modem_lines(struct rtuart *u,
 	if (_mask & RTUART_OUTPUT_RTS) {
 		if (gpiod_line_set_value(uart->gpio_dmxtxen.line,
 					 (_line & RTUART_OUTPUT_RTS) ? 0 : 1))
-			printf ("failed to set RTS gpio\n");
+			printk (KERN_WARNING"failed to set RTS gpio\n");
 	}
 
 	if (rtuart_read_u32(u, PL011_REG_CR, &cr))
@@ -370,7 +370,7 @@ static int pl011_set_fifo_trigger_level (struct rtuart *u, const int level, cons
 		ifls &= ~ (7<<bitOffset);
 		ifls |= rxcode << bitOffset;
 		rtuart_write_u32(u, PL011_REG_IFLS, ifls);
-		printf ("set fifo level: ifls=%08lX\n", ifls);
+		printk (KERN_DEBUG"set fifo level: ifls=%08lX\n", ifls);
 		return 0;
 	}
 	return -1;
@@ -438,8 +438,7 @@ static int pl011_write_chars (struct rtuart *u, const u8 * buffer, const size_t 
 
 static int pl011_read_chars (struct rtuart *u, u8 * buffer, const size_t count)
 {
-// DONE
-	printf ("pl011_read_chars (count:%lu)\n", count);
+	printk (KERN_DEBUG"pl011_read_chars (count:%lu)\n", count);
 	struct rtuart_pl011 * uart = container_of(u, struct rtuart_pl011, uart);
 	size_t c = 0;
 	while (c < count)
@@ -464,7 +463,7 @@ static void pl011_handle_receiver_empty(struct rtuart_pl011 * uart)
 	if (rtuart_read_u32(u, PL011_REG_FR, &fr))
 		return;
 
-	printf ("pl011_handle_receiver_empty fr:%08lX txempty:%d txbusy:%d n:%02X\n",
+	printk (KERN_DEBUG"pl011_handle_receiver_empty fr:%08lX txempty:%d txbusy:%d n:%02lX\n",
 		fr,
 		PL011_FR_ISRXFIFOEMPTY(fr),
 		PL011_FR_ISTXBUSY(fr),
@@ -474,7 +473,7 @@ static void pl011_handle_receiver_empty(struct rtuart_pl011 * uart)
 	if (PL011_FR_ISTXFIFOEMPTY(fr) && (u->notify_mask & UART_NOTIFY_TXEMPTY))
 	{
 		u->notify_mask &= ~UART_NOTIFY_TXEMPTY;
-		if (PL011_FR_ISTXBUSY(fr))
+		if (!PL011_FR_ISTXBUSY(fr))
 		{
 			if (u->client && u->client->callbacks && u->client->callbacks->transmitter_empty)
 				u->client->callbacks->transmitter_empty(u);
@@ -535,14 +534,14 @@ static int pl011_handle_irq(struct rtuart *u)
 		if (0==(mis & (PL011_MIS_OE|PL011_MIS_BE|PL011_MIS_PE|PL011_MIS_FE|PL011_MIS_RT|PL011_MIS_TX|PL011_MIS_RX|PL011_MIS_CTS))) {
 			pl011_handle_receiver_empty(uart);
 		        pl011_uart_update_notification(u);
-			printf ("pl011_handle_irq:exit\n");
+			printk (KERN_DEBUG"pl011_handle_irq:exit\n");
 			fflush(stdout);
 			return 0;
 		}
 
 		if (mis & (PL011_MIS_OE | PL011_MIS_BE | PL011_MIS_PE | PL011_MIS_FE) ) {
 			rtuart_write_u32(u, PL011_REG_ICR, PL011_MIS_OE | PL011_MIS_BE | PL011_MIS_PE | PL011_MIS_FE);
-			printf ("pl011_handle_irq:lsr\n");
+			printk (KERN_DEBUG"pl011_handle_irq:lsr\n");
 			pl011_handle_lsr(uart, mis);
 		}
 
@@ -551,7 +550,7 @@ static int pl011_handle_irq(struct rtuart *u)
 			// Receiver available: read as much as is available and call recive function.
 			u32 fr;
 			rtuart_write_u32(u, PL011_REG_ICR, PL011_MIS_RX|PL011_MIS_RT);
-			printf ("pl011_handle_irq:rx\n");
+			printk (KERN_DEBUG"pl011_handle_irq:rx\n");
 			while (!rtuart_read_u32(u, PL011_REG_FR, &fr) &&
 			       !PL011_FR_ISRXFIFOEMPTY(fr)
 				) {
@@ -606,7 +605,7 @@ static int pl011_handle_irq(struct rtuart *u)
 
 		if (mis & PL011_MIS_TX) {
 			rtuart_write_u32(u, PL011_REG_ICR, PL011_MIS_TX);
-			printf ("pl011_handle_irq:tx\n");
+			printk (KERN_DEBUG"pl011_handle_irq:tx\n");
 		  	if (u->notify_mask & UART_NOTIFY_TXREADY)
 			{
 				u->notify_mask &= ~UART_NOTIFY_TXREADY;
@@ -621,7 +620,7 @@ static int pl011_handle_irq(struct rtuart *u)
 
 		if (mis & PL011_MIS_CTS) {
 			rtuart_write_u32(u, PL011_REG_ICR, PL011_MIS_CTS);
-			printf ("pl011_handle_irq:cts\n");
+			printk (KERN_DEBUG"pl011_handle_irq:cts\n");
 			// TODO: we need to fix handling here, the values given the callback are nonsense. It is just a pseudo implementation.
 			int cts_value = 1; // read value here.
 			if ((uart->old_input_state != cts_value) &&
@@ -677,7 +676,7 @@ static void pl011_uart_update_notification(struct rtuart * u)
 #endif
 		rtuart_write_u32(u, PL011_REG_CR, cr);
 	}
-	printf ("update_notification(0x%02lX) -> 0x%08lX\n", u->notify_mask, imsc);
+	printk (KERN_DEBUG"update_notification(0x%02lX) -> 0x%08lX\n", u->notify_mask, imsc);
 #if 1
 	if (start_tx) {
 		/* The transmision has just been switched on.
@@ -705,7 +704,7 @@ static int pl011_uart_enable_notification(struct rtuart * u, const unsigned long
 		u->notify_mask |= notify_mask;
 		pl011_uart_update_notification(u);
 	}
-	// else printf ("pl011_uart_enable_notification nochange\n");
+	// else printk (KERN_DEBUG"pl011_uart_enable_notification nochange\n");
 	return 0;
 }
 
@@ -718,7 +717,7 @@ static int pl011_uart_disable_notification(struct rtuart * u, const unsigned lon
 		u->notify_mask &= ~notify_mask;
 		pl011_uart_update_notification(u);
 	}
-	// else printf ("pl011_uart_disable_notification nochange\n");
+	// else printk (KERN_DEBUG"pl011_uart_disable_notification nochange\n");
 	return 0;
 }
 
@@ -766,16 +765,16 @@ struct rtuart * pl011_create(const unsigned long base_clock)
 			if (0 == u->gpio_dmxtxen.line) {
 				gpiod_chip_close(u->gpio_dmxtxen.chip);
 				u->gpio_dmxtxen.chip = 0;
-				printf ("!!!!!!! failed to get gpio0.18\n");
+				printk(KERN_ERR"!!!!!!! failed to get gpio0.18\n");
 			}
 			else if (gpiod_line_request_output(u->gpio_dmxtxen.line, "dmxtxen", 0)) {
-				printf ("!!!!!!! failed to request gpio0.18 as output\n");
+				printk (KERN_ERR"!!!!!!! failed to request gpio0.18 as output\n");
 				gpiod_line_release(u->gpio_dmxtxen.line);
 				gpiod_chip_close(u->gpio_dmxtxen.chip);
 			}
 		}
 		else
-			printf ("!!!!!!! failed to create gpio0\n");
+			printk (KERN_ERR"!!!!!!! failed to create gpio0\n");
 
 	}
 	return &u->uart;

@@ -23,6 +23,7 @@ static int uio32_read_u8(struct rtuart_bus * _bus, const int reg, u8 * value)
 {
   struct uio32_bus * bus = container_of(_bus, struct uio32_bus, base_bus);
   *value = *((u8*)(&bus->regs[reg]));
+  printk (KERN_DEBUG"uio32_read_u8(%02X) => %02X\n", reg, *value);
   return 0;
 }
 
@@ -30,6 +31,7 @@ static int uio32_read_u16(struct rtuart_bus * _bus, const int reg, u16 * value)
 {
   struct uio32_bus * bus = container_of(_bus, struct uio32_bus, base_bus);
   *value = *((u16*)(&bus->regs[reg]));
+  printk (KERN_DEBUG"uio32_read_u16(%02X) => %04X\n", reg, *value);
   return 0;
 }
 
@@ -37,12 +39,14 @@ static int uio32_read_u32(struct rtuart_bus * _bus, const int reg, u32 * value)
 {
   struct uio32_bus * bus = container_of(_bus, struct uio32_bus, base_bus);
   *value = *((u32*)(&bus->regs[reg]));
+  printk (KERN_DEBUG"uio32_read_u32(%02X) => %08lX\n", reg, *value);
   return 0;
 }
 
 static int uio32_write_u8(struct rtuart_bus * _bus, const int reg, const u8 value)
 {
   struct uio32_bus * bus = container_of(_bus, struct uio32_bus, base_bus);
+  printk (KERN_DEBUG"uio32_write_u8(%02X, %02X)\n", reg, value);
   *((u8*)(&bus->regs[reg])) = value;
   return 0;
 }
@@ -50,6 +54,7 @@ static int uio32_write_u8(struct rtuart_bus * _bus, const int reg, const u8 valu
 static int uio32_write_u16(struct rtuart_bus * _bus, const int reg, const u16 value)
 {
   struct uio32_bus * bus = container_of(_bus, struct uio32_bus, base_bus);
+  printk (KERN_DEBUG"uio32_write_u16(%02X, %04X)\n", reg, value);
   *((u16*)(&bus->regs[reg])) = value;
   return 0;
 }
@@ -58,6 +63,7 @@ static int uio32_write_u16(struct rtuart_bus * _bus, const int reg, const u16 va
 static int uio32_write_u32(struct rtuart_bus * _bus, const int reg, const u32 value)
 {
   struct uio32_bus * bus = container_of(_bus, struct uio32_bus, base_bus);
+  printk (KERN_DEBUG"uio32_write_u32(%02X, %08lX)\n", reg, value);
   *((u32*)(&bus->regs[reg])) = value;
   return 0;
 }
@@ -67,6 +73,7 @@ static int uio32_cleanup(struct rtuart_bus * _bus)
   struct uio32_bus * bus = container_of(_bus, struct uio32_bus, base_bus);
   // close(bus->fd);
   free(bus);
+  return 0;
 }
 
 struct rtuart_bus_ops uart_uio32_bus_ops =
@@ -87,7 +94,8 @@ struct rtuart_bus * uio32_create(int fd, const int offset, const size_t size)
   void * mem = mmap(0, size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
   if (mem == MAP_FAILED)
     {
-      perror("mmap failed\n");
+      perror("mmap failed");
+      printf("  offset:0x%08X  size:0x%08lX\n", offset, size);
       return 0;
     }
 
