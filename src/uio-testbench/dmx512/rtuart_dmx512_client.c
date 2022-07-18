@@ -2,13 +2,13 @@
 /*
  * Copyright (C) 2021 Michael Stickel <michael@cubic.org>
  */
+#include "kernel.h"
 #include "rtuart_dmx512_client.h"
 #include "rtuart_client.h"
 #include "rtuart.h"
 #include <string.h>
 #include <stdlib.h>
 #include <stdio.h>
-
 #include <signal.h> // for posix timer functions.
 #include <time.h> // for posix timer functions.
 
@@ -16,16 +16,6 @@
 #include "dmx512_port.h"
 
 extern void dump_dmx512_frame(struct dmx512_framequeue_entry * frame, const char * prompt);
-
-
-static void printlog(const char * msg)
-{
-  struct timespec now;
-  if (0==clock_gettime(CLOCK_MONOTONIC, &now))
-    printf ("[%lu.%09lu]%s", now.tv_sec, now.tv_nsec, msg);
-  else
-    printf ("[???]%s", msg);
-}
 
 enum {
 	DISCOVERY_REQUEST_REPLY_TIMEOUT = 5000, /*us*/
@@ -90,8 +80,8 @@ static const char * statename (const enum dmx512_uart_state state)
 
 
 #if 1
-#define next_state(p,s)  { printf("change state from %s to %s in %s\n", statename ((p)->state), statename (s), __func__); (p)->state = s; }
-#define next_state_label(p,s,l)  { printf("change state from %s to %s in %s:%s\n", statename ((p)->state), statename (s), __func__, l); (p)->state = s; }
+#define next_state(p,s)  { printk(KERN_DEBUG"change state from %s to %s in %s\n", statename ((p)->state), statename (s), __func__); (p)->state = s; }
+#define next_state_label(p,s,l)  { printk(KERN_DEBUG"change state from %s to %s in %s:%s\n", statename ((p)->state), statename (s), __func__, l); (p)->state = s; }
 #else
 #define next_state(p,s)          { (p)->state = s; }
 #define next_state_label(p,s,l)  { (p)->state = s; }
@@ -285,6 +275,9 @@ static void __posix_timer_thread_handler(sigval_t arg)
 	struct dmx512_uart_port * port = (struct dmx512_uart_port *)arg.sival_ptr;
 	port->rdm_timer.callTimeoutHandler = 1;
 	printk (KERN_DEBUG"#### posix timeout handler called\n");
+        printf("posix timeout handler called\n");
+        // tasklet_schedule(rdm_timeout_tasklet);
+        dmx512rtuart_handle_rdm_timeout(port);
 }
 
 static void dmx512rtuart_start_rdm_timer(struct dmx512_uart_port * port,
@@ -395,11 +388,6 @@ static int dmx512frame_is_rdm_discover_reply(u8 * data, const int count)
 
 static int dmx512frame_is_rdm(u8 * data, const int count)
 {
-	/*
-	printf ("dmx512frame_is_rdm SC:%02X  SSC:%02X\n",
-		data[DMX_POS_STARTCODE],
-		data[RDM_POS_SUBSTARTCODE]);
-	*/
 	return  (data[DMX_POS_STARTCODE] == SC_RDM) &&
 		(data[RDM_POS_SUBSTARTCODE] == SC_SUB_MESSAGE);
 }
@@ -491,6 +479,11 @@ static struct dmx512_framequeue_entry* dmx512rtuart_checkout_rx_frame(struct dmx
 	struct dmx512_framequeue_entry * f = port->rx.frame;
 	if (f) {
 		f->frame.payload_size = port->rx.count - 1;
+
+                printf ("dmx512rtuart_checkout_rx_frame: startcode=%02X size=%d\n",
+                        f->frame.startcode,
+                        f->frame.payload_size);
+
 		if (f->frame.startcode == 0x00)
 			dmx512_uart_update_automatic_framecount_locking(port);
 	}
@@ -504,6 +497,7 @@ static struct dmx512_framequeue_entry* dmx512rtuart_checkout_rx_frame(struct dmx
 
 static void dmx512_uart_update_automatic_framecount_locking(struct dmx512_uart_port * port)
 {
+  printf ("dmx512_uart_update_automatic_framecount_locking\n");
 	struct dmx512_framequeue_entry * f = port->rx.frame;
 	if (f && f->frame.startcode == 0)
 	{
@@ -512,22 +506,35 @@ static void dmx512_uart_update_automatic_framecount_locking(struct dmx512_uart_p
 		{
 			if (f->frame.payload_size != port->rx.slot_count_lock.matching_slot_count)
 			{
+                          printf ("lost framecount locked\n");
+
 				port->rx.slot_count_lock.locked = 0;
 				port->rx.slot_count_lock.matching_frame_count = 0;
 				/* start with what we have */
 				port->rx.slot_count_lock.matching_slot_count = f->frame.payload_size;
 			}
+                        else
+                          printf ("framecount is locked\n");
 		}
 		else
 		{
 			if (f->frame.payload_size == port->rx.slot_count_lock.matching_slot_count)
 			{
 				++port->rx.slot_count_lock.matching_frame_count;
+                                printf ("framecount matches %d requred:%d\n",
+                                        port->rx.slot_count_lock.matching_frame_count,
+                                        port->rx.slot_count_lock.required_count
+                                        );
 				if (port->rx.slot_count_lock.required_count == port->rx.slot_count_lock.matching_frame_count)
+                                  {
+                                    printf ("framecount has locked in\n");
+
 					port->rx.slot_count_lock.locked = 1;
+                                  }
 			}
 			else
 			{
+                          printf ("framecount does not lock\n");
 				port->rx.slot_count_lock.matching_frame_count = 0;
 				port->rx.slot_count_lock.matching_slot_count = f->frame.payload_size;
 			}
@@ -1107,7 +1114,7 @@ static int dmx512_rtuart_client_send_frame (struct dmx512_port * dmxport, struct
 	}
 	else
 	{
-		next_state(port, PORT_STATE_TRANSMIT_BREAK);
+                next_state(port, PORT_STATE_TRANSMIT_BREAK);
 		struct rtuart * uart = port->uart;
 		port->tx.frame = frame;
 		port->tx.ptr   = frame->frame.data;
@@ -1178,6 +1185,22 @@ static int dmx512_rtuart_client_send_frame (struct dmx512_port * dmxport, struct
 
 		// start_timer_nanoseconds(&port->tx.breaktimer, 1000*break_us);
 		// try to move this to some timer or bottomhalf.
+#if 1
+		if (0 == (frame->frame.flags & DMX512_FLAG_NOBREAK)) {
+                        uart_disable_notification(uart, UART_NOTIFY_TXREADY);
+                        rtuart_set_baudrate(uart, 250000/3);
+                        static unsigned char breakChar = 0;
+        		/*const int r = */rtuart_write_chars (uart, &breakChar, 1);
+                        uart_enable_notification(uart, UART_NOTIFY_TXEMPTY);
+                        // send char
+                        // wait transmitter empty
+		}
+                else
+                {
+                        next_state(port, PORT_STATE_TRANSMIT_DATA);
+                        uart_enable_notification(uart, UART_NOTIFY_TXREADY);
+                }
+#else
 		if (0 == (frame->frame.flags & DMX512_FLAG_NOBREAK)) {
 			rtuart_set_break(uart, 1);
 			usleep(break_us);
@@ -1185,6 +1208,8 @@ static int dmx512_rtuart_client_send_frame (struct dmx512_port * dmxport, struct
 		}
 		next_state(port, PORT_STATE_TRANSMIT_DATA);
 		uart_enable_notification(uart, UART_NOTIFY_TXREADY);
+#endif
+
 	}
 }
 
@@ -1218,7 +1243,7 @@ void dmx512_rtuart_client_enable_rs485_transmitter(struct dmx512_uart_port * por
 	// printk (KERN_DEBUG"enable_rs485_transmitter: %s\n", on ? "Output" : "Input");
 	rtuart_set_modem_lines(port->uart,
 			       RTUART_OUTPUT_RTS,
-			       on ? 0 : RTUART_OUTPUT_RTS);
+			       on ? RTUART_OUTPUT_RTS : 0);
 }
 
 struct dmx512_port * dmx512_rtuart_client_create(struct rtuart * uart)
@@ -1230,6 +1255,8 @@ struct dmx512_port * dmx512_rtuart_client_create(struct rtuart * uart)
 	uart->client = &port->client;
 	port->uart = uart;
 	port->client.callbacks = &dmx512rtuart_callbacks;
+
+        port->rx.slot_count_lock.required_count = 10;
 
 	next_state(port, PORT_STATE_DOWN);
 	port->enable_rs485_transmitter = dmx512_rtuart_client_enable_rs485_transmitter;
