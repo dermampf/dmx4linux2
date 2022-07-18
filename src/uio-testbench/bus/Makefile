@@ -1,4 +1,6 @@
 CFLAGS+=-I..
+CFLAGS+=-g -ggdb
+LDFLAGS+=-g -ggdb
 
 all : t_uio32_bus
 
