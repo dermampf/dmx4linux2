@@ -1,0 +1,39 @@
+#pragma once
+/*
+ * Values that are used commonly by the kernal-api as well as the ioctl interface.
+ */
+
+enum {
+	RTUART_CONTROL_LOOP  = (1<<0),
+	RTUART_CONTROL_BREAK = (1<<1),
+	RTUART_CONTROL_RTS   = (1<<2),
+	RTUART_CONTROL_DTR   = (1<<3),
+	RTUART_CONTROL_OUT1  = (1<<4),
+	RTUART_CONTROL_OUT2  = (1<<5),
+/*
+	RTUART_CONTROL_ = (1<<6),
+	RTUART_CONTROL_ = (1<<7),
+	RTUART_CONTROL_ = (1<<8),
+	RTUART_CONTROL_ = (1<<9),
+	RTUART_CONTROL_ = (1<<10),
+*/
+};
+
+enum {
+	RTUART_EVENT_BREAK      = (1<<0),
+	RTUART_EVENT_CTS_CHANGE = (1<<1),
+	RTUART_EVENT_DSR_CHANGE = (1<<2),
+	RTUART_EVENT_DCD_CHANGE = (1<<3),
+	RTUART_EVENT_RI_CHANGE  = (1<<4),
+	RTUART_EVENT_OVERRUN_ERROR = (1<<5),
+	RTUART_EVENT_FRAME_ERROR   = (1<<6),
+	RTUART_EVENT_PARITY_ERROR  = (1<<7),
+};
+
+enum {
+	RTUART_NOTIFY_TRANSMITTER_READY = (1<<0),
+	RTUART_NOTIFY_TRANSMITTER_EMPTY = (1<<1),
+	RTUART_NOTIFY_RECEIVER_HASDATA  = (1<<2),
+	RTUART_NOTIFY_RECEIVER_TIMEOUT  = (1<<3),
+	RTUART_NOTIFY_RECEIVER_EVENT    = (1<<4), /* Errors, Break, CTS-change, ... */
+};
