@@ -747,9 +747,9 @@ static  int dmx512suart_create_frame(struct suart_event_s * events,
   return count;
 }
 
-static  int dmx512suart_send_frame(struct dmx512suart_port * dmxport,
-                                   unsigned char *dmxdata,
-                                   int count)
+int dmx512suart_send_frame(struct dmx512suart_port * dmxport,
+                           unsigned char *dmxdata,
+                           int count)
 {
     if (dmxport && dmxport->suart)
     {
