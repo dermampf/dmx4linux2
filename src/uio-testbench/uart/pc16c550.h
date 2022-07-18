@@ -7,5 +7,8 @@
 
 struct rtuart;
 struct rtuart * pc16c550_create(const unsigned long base_clock);
+struct rtuart * pc16c550_create_at(const unsigned long base_clock,
+                                   unsigned long address_offset,
+                                   int irqno);
 
 #endif

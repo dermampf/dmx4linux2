@@ -16,6 +16,7 @@ struct rtuart_pc16c550
 	struct rtuart uart;
 	u8  fcr_shadow;
 	u32 base_clock;
+        struct tasklet_struct rxempty_tasklet;
 };
 
 enum {
@@ -43,7 +44,45 @@ enum
 	PC16550_LSR_THRE            = (1<<5), // Transmitter Holding Register Empty
 	PC16550_LSR_TRANSMITTER_EMPTY = (1<<6),
 	PC16550_LSR_ERROR_IN_RXFIFO   = (1<<7),
+
+        PC16550_LCR_DLAB   = (1<<7),
 };
+
+
+static inline u8 __read_register(struct rtuart *u, int regno)
+{
+  u8 v;
+  rtuart_read_u8(u, regno, &v);
+  return v;
+}
+
+static inline void __write_register(struct rtuart *u, int regno, u8 v)
+{
+  rtuart_write_u8(u, regno, v);
+}
+
+#define pc16c550_get_rbr(x)   __read_register(x,PC16550_REG_RBR)
+#define pc16c550_set_thr(x,v) __write_register(x,PC16550_REG_THR,v)
+#define pc16c550_get_ier(x)   __read_register(x,PC16550_REG_IER)
+#define pc16c550_set_ier(x,v) __write_register(x,PC16550_REG_IER,v)
+#define pc16c550_get_iir(x)   __read_register(x,PC16550_REG_IIR)
+#define pc16c550_set_fcr(x,v) __write_register(x,PC16550_REG_FCR,v) // rtuart_write_u32(u,PC16550_REG_FCR,v)
+#define pc16c550_get_lcr(x)   __read_register(x,PC16550_REG_LCR)
+#define pc16c550_set_lcr(x,v) __write_register(x,PC16550_REG_LCR,v)
+#define pc16c550_get_mcr(x)   __read_register(x,PC16550_REG_MCR)
+#define pc16c550_set_mcr(x,v) __write_register(x,PC16550_REG_MCR,v)
+#define pc16c550_get_lsr(x)   __read_register(x,PC16550_REG_LSR)
+#define pc16c550_set_lsr(x,v) __write_register(x,PC16550_REG_LSR,v)
+#define pc16c550_get_msr(x)   __read_register(x,PC16550_REG_MSR)
+#define pc16c550_set_msr(x,v) __write_register(x,PC16550_REG_MSR,v)
+#define pc16c550_get_scr(x)   __read_register(x,PC16550_REG_SCR)
+#define pc16c550_set_scr(x,v) __write_register(x,PC16550_REG_SCR,v)
+#define pc16c550_get_dll(x)   __read_register(x,PC16550_REG_DLL)
+#define pc16c550_set_dll(x,v) __write_register(x,PC16550_REG_DLL,v)
+#define pc16c550_get_dlm(x)   __read_register(x,PC16550_REG_DLM)
+#define pc16c550_set_dlm(x,v) __write_register(x,PC16550_REG_LCR,v)
+
+
 
 static unsigned int uart16550_lsr_to_event(const u8 lsr)
 {
@@ -61,141 +100,169 @@ static unsigned int uart16550_lsr_to_event(const u8 lsr)
 /* parity: 'n','e','o', '1', '0'. stopbits: 1=10, 1,5=15, 2=20 */
 static int pc16c550_set_format(struct rtuart *u, const int databits, const char parity, const int stopbits)
 {
-	u8 lcr;
-	rtuart_read_u8(u, PC16550_REG_LCR, &lcr);
+        u8 lcr = pc16c550_get_lcr(u);
 	lcr &= ~0x3f;
 	lcr |= databits-5;
 	lcr |= (stopbits > 10) ? 4 : 0;
 	lcr |= ( (parity=='e') ? 3 : (parity=='o') ? 1 : 0 ) << 3;
-	rtuart_write_u8(u, PC16550_REG_LCR, lcr);
+	pc16c550_set_lcr(u, lcr);
 	return 0;
 }
 
 static int pc16c550_get_format(struct rtuart *u, int * databits, char * parity, int * stopbits)
 {
-	u8 lcr;
-	rtuart_read_u8(u, PC16550_REG_LCR, &lcr);
+        const u8 lcr = pc16c550_get_lcr(u);
 	*databits = (lcr&3) + 5;
 	*parity = (lcr & 8) ? ((lcr & 0x10) ? 'e' : 'o' ) : 'n';
 	*stopbits = (lcr & 4) ? 20 : 10;
 	return 0;
 }
 
-static int pc16c550_set_baudrate(struct rtuart *u, const unsigned int baudrate)
+static void pc16c550_set_baudrate_divisor(struct rtuart * u, const unsigned int divisor)
+{
+	// lock uart
+	const u8 lcr = pc16c550_get_lcr(u);
+	pc16c550_set_lcr(u, lcr | PC16550_LCR_DLAB);
+        pc16c550_set_dll(u,(u8)divisor);
+        pc16c550_set_dlm(u,(u8)(divisor>>8));
+	pc16c550_set_lcr(u,lcr);
+	// unlock uart
+}
+
+static unsigned int pc16c550_get_baudrate_divisor(struct rtuart * u)
+{
+	// lock uart
+	const u8 lcr = pc16c550_get_lcr(u);
+	pc16c550_set_lcr(u, lcr | PC16550_LCR_DLAB);
+        const unsigned int divisor = pc16c550_get_dll(u) | (pc16c550_get_dlm(u)<<8);
+	pc16c550_set_lcr(u,lcr);
+        return divisor;
+	// unlock uart
+}
+
+static inline unsigned long pc16c550_baseclock(struct rtuart *u)
 {
 	struct rtuart_pc16c550 * uart = container_of(u, struct rtuart_pc16c550, uart);
-	// lock uart
-	const int oversampling = 16;
-        const unsigned int divisor = (uart->base_clock / oversampling) / baudrate;
-	u8 lcr;
-	rtuart_read_u8(u, PC16550_REG_LCR, &lcr);
-	rtuart_write_u8(u, PC16550_REG_LCR, lcr | (1<<7));
-	rtuart_write_u8(u, PC16550_REG_DLL, (u8)divisor);
-	rtuart_write_u8(u, PC16550_REG_DLM, (u8)(divisor>>8));
-	rtuart_write_u8(u, PC16550_REG_LCR, lcr);
-	// unlock uart
+        return uart->base_clock;
+}
+
+static inline unsigned long pc16c550_oversampling(struct rtuart * u)
+{
+        (void)u;
+        return 16;
+}
+
+static int pc16c550_set_baudrate(struct rtuart *u, const unsigned int baudrate)
+{
+        if (baudrate <= 0)
+                return -1;
+        const unsigned int divisor = (pc16c550_baseclock(u) / pc16c550_oversampling(u)) / baudrate;
+        pc16c550_set_baudrate_divisor(u, divisor);
 	return 0;
 }
 
 static int pc16c550_get_baudrate(struct rtuart *u, unsigned int * baudrate)
 {
-	struct rtuart_pc16c550 * uart = container_of(u, struct rtuart_pc16c550, uart);
-	// lock uart
-	u8 divisor_msb, divisor_lsb;
-	u8 lcr;
-	const int oversampling = 16;
-	rtuart_read_u8(u, PC16550_REG_LCR, &lcr);
-	rtuart_write_u8(u, PC16550_REG_LCR, lcr | (1<<7));
-	rtuart_read_u8(u, PC16550_REG_DLL, &divisor_lsb);
-	rtuart_read_u8(u, PC16550_REG_DLM, &divisor_msb);
-	rtuart_write_u8(u, PC16550_REG_LCR, lcr);
-	*baudrate = (uart->base_clock / oversampling) / (divisor_msb<<8 + divisor_lsb);
-	// unlock uart
+        *baudrate = (pc16c550_baseclock(u) / pc16c550_oversampling(u)) / pc16c550_get_baudrate_divisor(u);
 	return 0;
 }
 
 static int pc16c550_set_break(struct rtuart *u, const int on)
 {
-	u8 lcr;
-	rtuart_read_u8(u, PC16550_REG_LCR, &lcr);
+	u8 lcr = pc16c550_get_lcr(u);
 	if (on)
 		lcr |= 0x40;
 	else
 		lcr &= ~0x40;
-	rtuart_write_u8(u, PC16550_REG_LCR, lcr);
+	pc16c550_set_lcr(u, lcr);
 	return 0;
 }
 
 static int pc16c550_get_break(struct rtuart *u, int *on)
 {
-	u8 lcr;
-	rtuart_read_u8(u, PC16550_REG_LCR, &lcr);
-	*on = (lcr & 0x40) ? 1 : 0;
+	*on = (pc16c550_get_lcr(u) & 0x40) ? 1 : 0;
 	return 0;
 }
 
 static int pc16c550_get_line_status(struct rtuart *u, unsigned int * line)
 {
-	u8 l;
-	const int ret = rtuart_read_u8(u, PC16550_REG_LSR, &l);
-	*line = l;
-	return ret;
+        *line = pc16c550_get_lsr(u);
+	return 0;
 }
 
 static int pc16c550_set_modem_lines(struct rtuart *u,
 				    unsigned int mask,
 				    unsigned int line)
 {
-	u8 mcr;
-	if (rtuart_read_u8(u, PC16550_REG_MCR, &mcr))
-		return -1;
+	// pc16c550_set_mcr(u, (pc16c550_get_mcr(u) & ~mask) | (line & mask));
+	u8 mcr = pc16c550_get_mcr(u);
 	mcr &= ~mask;
 	mcr |= mask & line;
 	// mcr = (mcr & ~mask) | (line & mask);
 	// RTUART_OUTPUT_DTR, RTUART_OUTPUT_RTS, RTUART_OUTPUT_GENERIC0, RTUART_OUTPUT_GENERIC1
-	return rtuart_write_u8(u, PC16550_REG_MCR, mcr);
+	pc16c550_set_mcr(u, mcr);
+}
+
+static u8 pc16c550_get_fcr(struct rtuart *u)
+{
+        struct rtuart_pc16c550 * uart = container_of(u, struct rtuart_pc16c550, uart);
+        return uart->fcr_shadow;
+}
+
+static void pc16c550_rmw_fcr(struct rtuart *u, u8 mask, u8 value)
+{
+        struct rtuart_pc16c550 * uart = container_of(u, struct rtuart_pc16c550, uart);
+        uart->fcr_shadow &= ~mask;
+        uart->fcr_shadow |= mask & value &  ~6; // do not remember RX&TX FIFO Reset, otherwise we would accidentially reset FIFOS evertime we write fcr.
+        pc16c550_set_fcr(u, uart->fcr_shadow | (mask & value));
 }
 
 static int pc16c550_set_fifo_enable(struct rtuart *u, const int on)
 {
-	struct rtuart_pc16c550 * uart = container_of(u, struct rtuart_pc16c550, uart);
-	if (on)
-		uart->fcr_shadow |= 1;
-	else
-		uart->fcr_shadow &= ~1;
-	// flush tx and rx fifo on fifo enable.
-	rtuart_write_u32(u, PC16550_REG_FCR, uart->fcr_shadow | (on ? 6 : 0));
+        // reset tx&rx fifo on enable
+        pc16c550_rmw_fcr(u, 7, on ? 7 : 0);
 	return 0;
+}
+
+static int pc16c550_get_fifo_enable(struct rtuart *u)
+{
+	struct rtuart_pc16c550 * uart = container_of(u, struct rtuart_pc16c550, uart);
+        return (uart->fcr_shadow & 1);
 }
 
 static int pc16c550_flush_fifo (struct rtuart *u, const int flush_tx, const int flush_rx)
 {
-	struct rtuart_pc16c550 * uart = container_of(u, struct rtuart_pc16c550, uart);
-	rtuart_write_u32(u, PC16550_REG_FCR, uart->fcr_shadow | (flush_tx?4:0) | (flush_rx ? 2 : 0));
+        pc16c550_rmw_fcr(u, 6, (flush_tx ? 4 : 0) | (flush_rx ? 2 : 0));
 	return 0;
 }
 
 static int pc16c550_set_rxfifo_trigger_level (struct rtuart *u, const int level)
 {
-	struct rtuart_pc16c550 * uart = container_of(u, struct rtuart_pc16c550, uart);
-	int v = 0;
 	switch (level)
 	{
 	case 14:
-		v++;
+                pc16c550_rmw_fcr(u, 0xC0, 3<<6);
+                break;
 	case 8:
-		v++;
+                pc16c550_rmw_fcr(u, 0xC0, 2<<6);
+                break;
 	case 4:
-		v++;
+                pc16c550_rmw_fcr(u, 0xC0, 1<<6);
+                break;
 	case 1:
-		uart->fcr_shadow = (uart->fcr_shadow & ~0xC0) | (v<<6);
-		printf ("set rxfifo level: fcr=%02X\n", uart->fcr_shadow);
-		rtuart_write_u32(u, PC16550_REG_FCR, uart->fcr_shadow);
-		break;
+                pc16c550_rmw_fcr(u, 0xC0, 0<<6);
+                break;
 	default:
 		return -1;
 	}
 	return 0;
+}
+
+static int pc16c550_get_rxfifo_trigger_level (struct rtuart *u)
+{
+        static const u8 levels[4] = { 1, 4, 8, 14 };
+        const int fcr = pc16c550_get_fcr(u);
+        return levels[fcr];
 }
 
 static int pc16c550_set_txfifo_trigger_level (struct rtuart *u, const int level)
@@ -207,9 +274,7 @@ static int pc16c550_set_txfifo_trigger_level (struct rtuart *u, const int level)
 static int pc16c550_get_tx_fifo_size(struct rtuart *u, unsigned int * level)
 {
 	(void)u;
-	// *level = (!rtuart_write_u8(u, 1, &fifo) && (fifo0xC0 == 0xC0)) ? 16 : 1;
-
-	*level = 16;
+        *level = pc16c550_get_fifo_enable(u) ? 16 : 1;
 	return 0;
 }
 
@@ -237,7 +302,7 @@ static int pc16c550_write_chars (struct rtuart *u, const u8 * buffer, const size
 {
 	size_t c = count;
 	while (c-- > 0)
-		rtuart_write_u8(u, 0, *(buffer++));
+		pc16c550_set_thr(u, *(buffer++));
 	return 0;
 }
 
@@ -248,10 +313,7 @@ static int pc16c550_read_chars (struct rtuart *u, u8 * buffer, const size_t coun
 {
 	size_t c = count;
 	while (c-- > 0)
-	{
-		rtuart_read_u8(u, 0, buffer);
-		++buffer;
-	}
+		*(buffer++) = pc16c550_get_rbr(u);
 	return count;
 }
 
@@ -262,14 +324,18 @@ static void pc16c550_uart_update_notification(struct rtuart * u);
 static void uart16550_handle_lsr(struct rtuart_pc16c550 * uart)
 {
 	struct rtuart * u = &uart->uart;
-	u8 lsr, rhr;
-	rtuart_read_u8(u, PC16550_REG_LSR, &lsr);
-	if (lsr & PC16550_LSR_BREAK_INTERRUPT) // break interrupt - we also receive a 0-char -> dummy read.
-		rtuart_read_u8(u, PC16550_REG_RBR, &rhr);
+        u8 lsr = pc16c550_get_lsr(u);
 
-	if ((lsr&(15<<1)) && u->client && u->client->callbacks && u->client->callbacks->line_status_event)
+	if (lsr & PC16550_LSR_BREAK_INTERRUPT) // break interrupt - we also receive a 0-char -> dummy read.
+		pc16c550_get_rbr(u);
+
+	// PC16550_LSR_DATA_READY
+	// PC16550_LSR_ERROR_IN_RXFIFO
+
+        const unsigned int lineStatusEvent = uart16550_lsr_to_event(lsr);
+	if (lineStatusEvent && u->client && u->client->callbacks && u->client->callbacks->line_status_event)
 	{
-		u->client->callbacks->line_status_event(u, uart16550_lsr_to_event(lsr));
+		u->client->callbacks->line_status_event(u, lineStatusEvent);
 	}
 
 	if ((lsr & PC16550_LSR_THRE) && (u->notify_mask & UART_NOTIFY_TXEMPTY))
@@ -285,10 +351,15 @@ static void uart16550_handle_lsr(struct rtuart_pc16c550 * uart)
 			// TODO: cheating implementation that sleep. Works for as long as we are in userspace.
 			if (u->client && u->client->callbacks && u->client->callbacks->transmitter_empty)
 			{
+#if 0
+                                tasklet_schedule( &uart->rxempty_tasklet );
+#else
 				// Linux: schedule_delayed_task(uart->rxempty_task);
-				while (!rtuart_read_u8(u, PC16550_REG_LSR, &lsr) && !(lsr & PC16550_LSR_TRANSMITTER_EMPTY))
+
+                                while (0==(pc16c550_get_lsr(u) & PC16550_LSR_TRANSMITTER_EMPTY))
 					usleep(88);
 				u->client->callbacks->transmitter_empty(u);
+#endif
 			}
 		}
 	}
@@ -303,14 +374,18 @@ static void uart16550_rxempty_task_handler(struct rtuart * u)
 	}
 }
 
+static void uart16550_rxempty_function( unsigned long data )
+{
+        uart16550_rxempty_task_handler((struct rtuart *)data);
+}
+
 // may have interrup handler in a seperate file
 static int pc16c550_handle_irq(struct rtuart *u)
 {
 	struct rtuart_pc16c550 * uart = container_of(u, struct rtuart_pc16c550, uart);
 	while (1)
 	{
-		u8 iir, rhr, msr, lsr;
-		rtuart_read_u8(u, PC16550_REG_IIR, &iir);
+                const u8 iir = pc16c550_get_iir(u);
 		//printf ("iir:%02X\n", iir);
 		switch (iir & 0xf)
 		{
@@ -322,9 +397,11 @@ static int pc16c550_handle_irq(struct rtuart *u)
 			break;
 
 		case 0: // modem status
-			rtuart_read_u8(u, PC16550_REG_MSR, &msr);
-			if (u->client && u->client->callbacks && u->client->callbacks->modem_input_changed)
-				u->client->callbacks->modem_input_changed(u, (msr>>4)&15, msr&15);
+                        {
+                                const u8 msr = pc16c550_get_msr(u);
+                                if (u->client && u->client->callbacks && u->client->callbacks->modem_input_changed)
+                                        u->client->callbacks->modem_input_changed(u, (msr>>4)&15, msr&15);
+                        }
 			break;
 
 		case 2: // THR empty
@@ -397,7 +474,7 @@ static void pc16c550_uart_update_notification(struct rtuart * u)
 		v |= 4;
 	if (u->notify_mask & UART_NOTIFY_INPUTCHANGED)
 		v |= 8;
-	rtuart_write_u8(u, PC16550_REG_IER, v);
+	pc16c550_set_ier(u, v);
 	// printf ("update_notification(%02lX) -> %02X\n", u->notify_mask, v);
 }
 
@@ -461,12 +538,27 @@ struct rtuart * pc16c550_create(const unsigned long base_clock)
 	if (u)
 	{
 		u->uart.ops = &pc16c550_ops;
+                u->uart.address_offset = 0;
+                u->uart.irqno = 0;
 		u->fcr_shadow = 0;
 		u->base_clock = base_clock;
+                tasklet_init(&u->rxempty_tasklet, uart16550_rxempty_function, (unsigned long)u);
 	}
 	return &u->uart;
 }
 
+struct rtuart * pc16c550_create_at(const unsigned long base_clock,
+                                   unsigned long address_offset,
+                                   int irqno)
+{
+        struct rtuart * u = pc16c550_create(base_clock);
+        if (u)
+        {
+                u->address_offset = address_offset;
+                u->irqno = irqno;
+        }
+        return u;
+}
 
 //TODO: remove this once moved to kernel -- in the kernel use a bottomhalf that triggers itself or a timer.
 void pc16c550_periodic_check(struct rtuart * u)
