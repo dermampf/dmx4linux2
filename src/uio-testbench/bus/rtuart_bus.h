@@ -19,5 +19,6 @@ int rtuart_bus_read_u32(struct rtuart_bus * u, const int reg, u32 * value);
 int rtuart_bus_write_u8(struct rtuart_bus * u, const int reg, const u8 value);
 int rtuart_bus_write_u16(struct rtuart_bus * u, const int reg, const u16 value);
 int rtuart_bus_write_u32(struct rtuart_bus * u, const int reg, const u32 value);
+int rtuart_bus_irq_pending(struct rtuart_bus * u, unsigned long * irqmask);
 
 #endif

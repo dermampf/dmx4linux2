@@ -17,15 +17,17 @@ struct rtuart
   struct rtuart_ops * ops;
   struct rtuart_client * client;
   u32 notify_mask;
+  u32    address_offset;
+  int    irqno;
 };
 
 enum rtuart_notify
 {
-	UART_NOTIFY_TXEMPTY = 0x01,
-	UART_NOTIFY_TXREADY = 0x02,
-	UART_NOTIFY_RXAVAILABLE = 0x04,
-	UART_NOTIFY_INPUTCHANGED = 0x08,
-	UART_NOTIFY_LINEEVENT = 0x10
+        UART_NOTIFY_TXEMPTY = 0x01,     /* The transmitter is empty. The last Bit has been send. */
+	UART_NOTIFY_TXREADY = 0x02,     /* The transmitter has space available */
+	UART_NOTIFY_RXAVAILABLE = 0x04, /* There receiver received data. */
+	UART_NOTIFY_INPUTCHANGED = 0x08, /* one or more of the inputs changed state */
+	UART_NOTIFY_LINEEVENT = 0x10     /* Something happened on the line. E.g. Framing-, parity, overrun- error or a break was detected. */
 };
 
 enum rtuart_event
@@ -48,32 +50,32 @@ enum {
 
 static inline int rtuart_read_u8(struct rtuart * u, const int reg, u8 * value)
 {
-  return rtuart_bus_read_u8(u->bus, reg, value);
+  return rtuart_bus_read_u8(u->bus, reg + u->address_offset, value);
 }
 
 static inline int rtuart_read_u16(struct rtuart * u, const int reg, u16 * value)
 {
-  return rtuart_bus_read_u16(u->bus, reg, value);
+  return rtuart_bus_read_u16(u->bus, reg+u->address_offset, value);
 }
 
 static inline int rtuart_read_u32(struct rtuart * u, const int reg, u32 * value)
 {
-  return rtuart_bus_read_u32(u->bus, reg, value);
+  return rtuart_bus_read_u32(u->bus, reg+u->address_offset, value);
 }
 
 static inline int rtuart_write_u8(struct rtuart * u, const int reg, const u8 value)
 {
-  return rtuart_bus_write_u8(u->bus, reg, value);
+  return rtuart_bus_write_u8(u->bus, reg+u->address_offset, value);
 }
 
 static inline int rtuart_write_u16(struct rtuart * u, const int reg, const u16 value)
 {
-  return rtuart_bus_write_u16(u->bus, reg, value);
+  return rtuart_bus_write_u16(u->bus, reg+u->address_offset, value);
 }
 
 static inline int rtuart_write_u32(struct rtuart * u, const int reg, const u32 value)
 {
-  return rtuart_bus_write_u32(u->bus, reg, value);
+  return rtuart_bus_write_u32(u->bus, reg+u->address_offset, value);
 }
 
 
@@ -88,7 +90,7 @@ static inline int rtuart_set_format(struct rtuart * u,
   printf ("rtuart_set_format: u:%p u->ops:%p  u->ops->set_format:%p\n",
 	  u,
 	  u ? u->ops : (void*)-1,
-	  (u && u->ops) ? u->ops->set_format : (void*)-1);
+	  (u && u->ops) ? (void*)u->ops->set_format : (void*)-1);
   return u->ops->set_format(u, databits, parity, stopbits);
 }
 

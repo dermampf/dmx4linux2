@@ -36,3 +36,8 @@ int rtuart_bus_write_u32(struct rtuart_bus * bus, const int reg, const u32 value
 {
   return bus->ops->write_u32 ? bus->ops->write_u32(bus, reg, value) : -1;
 }
+
+int rtuart_bus_irq_pending(struct rtuart_bus * bus, unsigned long * irqmask)
+{
+  return bus->ops->irq_pending ? bus->ops->irq_pending(bus, irqmask) : -1;
+}

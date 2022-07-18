@@ -21,6 +21,7 @@ struct rtuart_bus_ops
   int (*read_u32)(struct rtuart_bus *, const int reg, u32 * value);
   int (*write_u32)(struct rtuart_bus *, const int reg, const u32 value);
   int (*cleanup)(struct rtuart_bus *);
+  int (*irq_pending)(struct rtuart_bus *, unsigned long * irqmask);
   // may have read_u64, write_u64 in the future.
 };
 
