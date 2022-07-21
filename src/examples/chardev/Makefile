@@ -1,3 +1,5 @@
+OBJDIR=obj/
+TARGETHOST=root@192.168.10.66
 CFLAGS+=-I../../include
 LDLIBS+=-lm
 
