@@ -1,8 +1,10 @@
 OBJDIR=obj/
 
-CFLAGS+=-I../include/
+CFLAGS+=-I../include/ -Iinclude
 LDLIBS+=-lpthread
 CFLAGS+=-g -ggdb
+CFLAGS+=-D_FILE_OFFSET_BITS=64
+CFLAGS+=-DFUSE_USE_VERSION=30
 
 TARGETS=$(OBJDIR)dmx512_cuse_loop $(OBJDIR)dmx512_cuse_uart
 

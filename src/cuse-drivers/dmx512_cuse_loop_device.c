@@ -273,6 +273,7 @@ int main(int argc, char** argv)
         printf ("usage: %s dmx512_cuse_dev <cardno> <cardno>\n", argv[0]);
         return 1;
     }
+    dmx512_core_init();
 
     bzero(&testdmx_cards, sizeof(testdmx_cards));
 
@@ -310,6 +311,8 @@ int main(int argc, char** argv)
         (char**) &cusearg,
         cards, num_cards,
         NULL, 0);
+
+    dmx512_core_exit();
 
     return ret;
 }

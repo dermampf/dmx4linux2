@@ -463,6 +463,7 @@ int main(int argc, char** argv)
         LOG ("usage: %s dmx512_cuse_dev <cardno> <cardno>", argv[0]);
         return 1;
     }
+    dmx512_core_init();
 
     const int max_cards =
         sizeof(uartdmx_cards) / sizeof(*uartdmx_cards);
@@ -489,6 +490,8 @@ int main(int argc, char** argv)
         (char**) &cusearg,
         cards, num_cards,
         NULL, 0);
+
+    dmx512_core_exit();
 
     return ret;
 }

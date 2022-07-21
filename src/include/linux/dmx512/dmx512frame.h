@@ -28,7 +28,9 @@ enum
     DMX512_FLAG_BACK_TIMESTAMP = (1<<4), /* have back timestamp - on rx only. */
 
     DMX512_FLAG_IS_RDM      = (1<<6),/* RDM frame. This is also set if DMX512_FLAG_IS_RDM_DISC is set */
-    DMX512_FLAG_IS_RDM_DISC = (1<<7) /* RDM Discover request or reply */
+    DMX512_FLAG_IS_RDM_DISC = (1<<7), /* RDM Discover request or reply */
+
+    DMX512_FLAGS_IS_TRANSMIT_FRAME = (1<<15) /* used when promiscuous mode is enabled to differentiate outgoing from incomming frames. */
   };
 
 struct dmx512frame

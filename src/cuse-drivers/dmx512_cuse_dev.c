@@ -34,8 +34,19 @@
 
 #include "dmx512_cuse_dev.h"
 
-static int g_pollnotify = 0;
-static struct fuse_pollhandle *g_ph = 0;
+
+#define CONFIG_RXFRAMEQUEUE
+
+
+
+enum { MAX_FD_WATCHERS = 256 };
+static struct dmx512_cuse_fdwatcher g_fdwatchers[MAX_FD_WATCHERS];
+static int g_num_fdwatchers = 0;
+
+
+#ifdef CONFIG_RXFRAMEQUEUE
+#include <linux/dmx512/dmx512framequeue.h>
+#endif
 
 struct dmx512_cuse_context
 {
@@ -54,6 +65,11 @@ struct dmx512_cuse_context
     unsigned long long port_mask;
 
     /*
+     * same but for transmitted frames to loop back.
+     */
+    unsigned long long port_txmask;
+
+    /*
      * Every context (open filehandle) should have not more than
      * one active read at a time, otherwise things can go wrong.
      */
@@ -64,11 +80,17 @@ struct dmx512_cuse_context
     //-- If we have an open read_req, we look at the start of the queue
     //-- and if it is not empty we complete the read_req with that frame.
 
+    struct fuse_pollhandle *pollhandle;
+
+#ifdef CONFIG_RXFRAMEQUEUE
+    struct dmx512_framequeue  framequeue;
+#else
     int pollnotify;
     struct dmx512frame lastframe; // rather create a queue that holds received frames. But it should be limmited and old frames shall be thrown away.
-    struct fuse_pollhandle *pollhandle;
+#endif
 };
 
+// number of parallel opens possible for one device.
 #define DMX512_CUSE_CONTEXT_COUNT (32)
 
 struct dmx512_cuse_card
@@ -86,6 +108,28 @@ static struct dmx512_cuse_context * dmx512_cuse_context(struct dmx512_cuse_card 
 static struct dmx512_cuse_card * dmx512_cuse_req_card(fuse_req_t);
 
 
+
+#ifdef CONFIG_RXFRAMEQUEUE
+struct dmx512_framequeue free_framequeue;
+
+// get a new frame from the pool of this card.
+struct dmx512_framequeue_entry * dmx512_get_frame(struct dmx512_cuse_card * card)
+{
+    (void)card;
+    /* we may later use the port to control the per port usage of frames
+       or have some accounting. */
+    return dmx512_framequeue_get (&free_framequeue);
+}
+
+// return a frame to the pool of this card.
+void dmx512_put_frame(struct dmx512_cuse_card * card, struct dmx512_framequeue_entry * frame)
+{
+    (void)card;
+    /* we may later use the port to control the per port usage of frames
+       or have some accounting. */
+    dmx512_framequeue_put(&free_framequeue, frame);
+}
+#endif
 
 
 void dmx512_cuse_send_frame(struct dmx512_cuse_card *card,
@@ -108,28 +152,39 @@ void dmx512_cuse_handle_received_frame(struct dmx512_cuse_card *card,
             ctx->read_req = 0;
         }
 
+	const unsigned long long port_mask =
+	    (frame->flags & DMX512_FLAGS_IS_TRANSMIT_FRAME) ? ctx->port_txmask : ctx->port_mask;
 
-        if (ctx->in_use && ctx->read_req)
-        {
-            if ((frame->port<64) && (ctx->port_mask & (1<<frame->port)))
-            {
-                fuse_reply_buf(ctx->read_req, (void*)frame, sizeof(*frame));
-                ctx->read_req = 0;
-            }
-        }
-        else
-        {
-            if (ctx->in_use && ctx->pollhandle)
-            {
-                //ctx->lastframe = *frame;
-                memcpy(&ctx->lastframe, frame, sizeof(*frame));
-                ctx->pollnotify++;
-                fuse_notify_poll(ctx->pollhandle);
-            }
-        }
+        if (ctx->in_use)
+	{
+	    if ((frame->port < 64) && (port_mask & (1<<frame->port)))
+	    {
+		// TODO: can we have a rewad_req as well as a pollhandle?
+		// if that is true, then we need to execute both paths.
+		if (ctx->read_req)
+		{
+		    fuse_reply_buf(ctx->read_req, (void*)frame, sizeof(*frame));
+		    ctx->read_req = 0;
+		}
+		else if (ctx->pollhandle)
+		{
+#ifdef CONFIG_RXFRAMEQUEUE
+		    struct dmx512_framequeue_entry * e = dmx512_get_frame(card);
+		    if (e)
+		    {
+			memcpy(&e->frame, frame, sizeof(*frame));
+			dmx512_framequeue_put(&ctx->framequeue, e);
+		    }
+#else
+		    //ctx->lastframe = *frame;
+		    memcpy(&ctx->lastframe, frame, sizeof(*frame));
+		    ctx->pollnotify++;
+#endif
+		    fuse_notify_poll(ctx->pollhandle);
+		}
+	    }
+	}
     }
-
-
 }
 
 
@@ -175,8 +230,13 @@ static void dmx512_cuse_open(fuse_req_t req,
     struct dmx512_cuse_context * ctx = dmx512_cuse_context(dmx512, index);
     bzero(ctx, sizeof (struct dmx512_cuse_context));
     ctx->in_use = 1;
-    ctx->port_mask = 0xffffffffffffffff; // -1
+    ctx->port_mask = 0; // no port selected // 0xffffffffffffffff; // -1
     ctx->nonblocking = (fi->flags & O_NONBLOCK) ? 1 : 0;
+#ifdef CONFIG_RXFRAMEQUEUE
+    dmx512_framequeue_init(&ctx->framequeue);
+#endif
+    printf ("context%d activated %s\n",
+	    index, (ctx->nonblocking ? "nonblocking" : "blocking"));
     fi->fh = index;
     fuse_reply_open(req, fi);
 }
@@ -191,6 +251,11 @@ static void dmx512_cuse_release (fuse_req_t req,
         return;
     }
     ctx->in_use = 0;
+    ctx->port_mask = 0;
+#ifdef CONFIG_RXFRAMEQUEUE
+    dmx512_framequeue_cleanup(&ctx->framequeue);
+#endif
+    printf ("context deactivated\n");
     fuse_reply_err(req, 0);
 }
 
@@ -215,13 +280,26 @@ static void dmx512_cuse_read(fuse_req_t req,
         return;
     }
 
+
+#ifdef CONFIG_RXFRAMEQUEUE
+    if (!dmx512_framequeue_isempty(&ctx->framequeue))
+    {
+	struct dmx512_framequeue_entry * e = dmx512_framequeue_get (&ctx->framequeue);
+	if (e)
+	{
+	    fuse_reply_buf(req, (void*)(&e->frame), sizeof(e->frame));
+	    dmx512_put_frame(dmx512_cuse_req_card(req), e);
+	}
+    }
+#else
     const int data_available = ctx->lastframe.payload_size > 0;
     if (data_available)
     {
         fuse_reply_buf(req, (void*)(&ctx->lastframe), sizeof(ctx->lastframe));
         bzero(&ctx->lastframe, sizeof(ctx->lastframe));
     }
-    else
+#endif
+    else // no data available
     {
         if (ctx->nonblocking)
              fuse_reply_buf(req, 0, 0);
@@ -235,7 +313,7 @@ static void dmx512_cuse_read(fuse_req_t req,
                 // should not have two concurrent reads.
                 // ??? fuse_req_interrupted(ctx->read_req)
                 fuse_reply_err(ctx->read_req, EINTR);
-                ctx->read_req = 0;
+                ctx->read_req = 0; //TODO:this may be useless.
             }
             ctx->read_req = req;
         }
@@ -271,7 +349,10 @@ static void dmx512_cuse_write(fuse_req_t req,
         return;
     }
 
+    frame->flags |= DMX512_FLAGS_IS_TRANSMIT_FRAME;
+
     dmx512_cuse_send_frame(dmx512_cuse_req_card(req), frame);
+    dmx512_cuse_handle_received_frame(dmx512_cuse_req_card(req), frame);
 
     fuse_reply_write(req, size);
 }
@@ -577,6 +658,35 @@ static void dmx512_cuse_ioctl(fuse_req_t req,
         }
         break;
 
+    case DMX512_IOCTL_SET_PORT_TXFILTER:
+        if (in_bufsz == 0)
+        {
+            struct iovec iov = { arg, sizeof(unsigned long long) };
+            fuse_reply_ioctl_retry(req, &iov, 1, NULL, 0);
+        }
+        else
+        {
+            unsigned long long value = *((unsigned long long*)in_buf);
+            printf("DMX512_IOCTL_SET_PORT_TXFILTER=%08llX\n", value);
+            ctx->port_txmask = value;
+            fuse_reply_ioctl(req, 0, NULL, 0);
+        }
+        break;
+
+    case DMX512_IOCTL_GET_PORT_TXFILTER:
+        if (out_bufsz == 0)
+        {
+            struct iovec iov = { arg, sizeof(unsigned long long) };
+            fuse_reply_ioctl_retry(req, NULL, 0, &iov, 1);
+        }
+        else
+        {
+            unsigned long long value = 0;
+            value = ctx->port_txmask;
+            fuse_reply_ioctl(req, 0, &value, sizeof(unsigned long long));
+        }
+        break;
+
     case DMX512_IOCTL_QUERY_CARD_INFO:
         dmx512_cuse_query_card_info(ctx,
                                     req,
@@ -631,24 +741,28 @@ void dmx512_cuse_poll (fuse_req_t req,
         return;
     }
 
-    // call fuse_reply_poll(req, POLLOUT) when there is space available to send the next frame.
-    if (ctx->pollnotify > 0)
+    // based on: https://sourceforge.net/p/fuse/mailman/message/30451918/
+    if (ph)
     {
-        printf ("poll: have been notified of received frame\n");
-        --ctx->pollnotify;
-        fuse_reply_poll(req, POLLIN);
-        if (ctx->pollhandle)
-            fuse_pollhandle_destroy(ctx->pollhandle);
-    }
-    else
-    {
-        struct fuse_pollhandle *oldph = ctx->pollhandle;
-        ctx->pollhandle = 0;
-        if (oldph)
+	struct fuse_pollhandle *oldph = ctx->pollhandle;
+	ctx->pollhandle = ph;
+	if (oldph)
             fuse_pollhandle_destroy(oldph);
-        ctx->pollhandle = ph;
-        fuse_reply_poll(req, 0);
     }
+
+    unsigned revents = 0;
+#ifdef CONFIG_RXFRAMEQUEUE
+    if (!dmx512_framequeue_isempty(&ctx->framequeue))
+#else
+    if (ctx->pollnotify > 0)
+#endif
+    {
+	revents |= POLLIN;
+#ifndef CONFIG_RXFRAMEQUEUE
+	--ctx->pollnotify;
+#endif
+    }
+    fuse_reply_poll(req, revents);
 }
 
 static void dmx512_cuse_init (void *userdata,
@@ -744,6 +858,14 @@ static int fuse_multisession_loop(struct fuse_session **sessions,
         }
     }
 
+    {
+	int i;
+	for (i = 0; i < num_fdwatchers && g_num_fdwatchers < MAX_FD_WATCHERS; ++i)
+	    g_fdwatchers[g_num_fdwatchers++] = fdwatchers[i];
+	//for (i = 0; i < num_fdwatchers; ++i)
+	//   dmx512_cuse_add_fdwatcher(fdwatchers[i]);
+    }
+
     unsigned int timout_counter = 0;
     int res = 0;
     int run = 1;
@@ -768,13 +890,16 @@ static int fuse_multisession_loop(struct fuse_session **sessions,
                 n = fd+1;
         }
 
-        for (i=0; i<num_fdwatchers; ++i)
-          {
-            int fd = fdwatchers[i].fd;
-            FD_SET(fd, &readfds);
-            if (fd+1 > n)
-                n = fd+1;
-          }
+        for (i=0; i < g_num_fdwatchers; ++i)
+	{
+	    const int fd = g_fdwatchers[i].fd;
+	    if (fd != -1)
+	    {
+		FD_SET(fd, &readfds);
+		if (fd+1 > n)
+		    n = fd+1;
+	    }
+	}
 
         struct timeval timeout;
         timeout.tv_sec = 1;
@@ -812,14 +937,14 @@ static int fuse_multisession_loop(struct fuse_session **sessions,
             }
         }
 
-        for (i=0; i<num_fdwatchers; ++i)
-          {
-            int fd = fdwatchers[i].fd;
+        for (i=0; i < g_num_fdwatchers; ++i)
+	{
+	    const int fd = g_fdwatchers[i].fd;
             if (FD_ISSET(fd, &readfds))
             {
-              fdwatchers[i].callback(fd, fdwatchers[i].user);
+		g_fdwatchers[i].callback(fd, g_fdwatchers[i].user);
             }
-          }
+	}
     }
 
     {
@@ -891,4 +1016,64 @@ int dmx512_cuse_lowlevel_main(int argc, char *argv[],
         }
 
         return (res == -1) ? 1 : 0;
+}
+
+static int dmx512_cuse_fdwatcher_find_fd(const int fd)
+{
+    int i;
+    for (i = 0; g_num_fdwatchers < MAX_FD_WATCHERS; ++i)
+	if (g_fdwatchers[i].fd == fd)
+	    return i;
+    return -1;
+}
+
+
+int dmx512_cuse_fdwatcher_add(struct dmx512_cuse_fdwatcher * w)
+{
+    if (dmx512_cuse_fdwatcher_find_fd(w->fd)!=-1)
+	return -EINVAL;
+
+    const int first_free_entry = dmx512_cuse_fdwatcher_find_fd(-1);
+    if (first_free_entry < 0)
+	return -ENOMEM;
+
+    g_fdwatchers[first_free_entry] = *w;
+    if (first_free_entry+1 > g_num_fdwatchers)
+	g_num_fdwatchers = first_free_entry+1;
+
+    return 0;
+}
+
+int dmx512_cuse_fdwatcher_remove(struct dmx512_cuse_fdwatcher * w)
+{
+    const int i = dmx512_cuse_fdwatcher_find_fd(w->fd);
+    if (i < 0)
+	return -EINVAL;
+    g_fdwatchers[i].fd = -1;
+    g_fdwatchers[i].callback = 0;
+    g_fdwatchers[i].user = 0;
+    return 0;
+}
+
+
+
+int dmx512_core_init(void)
+{
+        printf("loading dmx512 core\n");
+#ifdef CONFIG_RXFRAMEQUEUE
+        dmx512_framequeue_init(&free_framequeue);
+        /* put some frame in the freequeue: 32 ports with 32 contexts w directions with 4 frames each. */
+        int i;
+        for (i = 0; i < 32*32*2*4; ++i)
+                dmx512_framequeue_put(&free_framequeue, dmx512_framequeue_entry_alloc());
+#endif
+        return 0;
+}
+
+void dmx512_core_exit(void)
+{
+    printf("unloading dmx512 core\n");
+#ifdef CONFIG_RXFRAMEQUEUE
+    dmx512_framequeue_cleanup(&free_framequeue);
+#endif
 }

@@ -56,4 +56,10 @@ int dmx512_cuse_lowlevel_main(int cuseargc, char ** cuseargv,
 struct dmx512_cuse_card_config * dmx512_cuse_card_config(struct dmx512_cuse_card *dmx512);
 
 
+int dmx512_cuse_fdwatcher_add(struct dmx512_cuse_fdwatcher * w);
+int dmx512_cuse_fdwatcher_remove(struct dmx512_cuse_fdwatcher * w);
+
+int  dmx512_core_init(void);
+void dmx512_core_exit(void);
+
 #endif
