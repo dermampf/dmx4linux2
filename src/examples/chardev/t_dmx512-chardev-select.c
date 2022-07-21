@@ -27,11 +27,20 @@ int main (int argc , char **argv)
     unsigned long long portmask = (argc > 2) ? atoi(argv[2]) : 1;
     int ret = ioctl(dmxfd, DMX512_IOCTL_SET_PORT_FILTER, &portmask);
     printf ("DMX512_IOCTL_SET_PORT_FILTER -> %d\n", ret);
-
     portmask = 0;
     ret = ioctl(dmxfd, DMX512_IOCTL_GET_PORT_FILTER, &portmask);
     printf ("DMX512_IOCTL_GET_PORT_FILTER -> %d\n", ret);
     printf ("current port filter: %08llX\n", portmask);
+
+
+    unsigned long long txportmask = (argc > 3) ? atoi(argv[3]) : 0;
+    ret = ioctl(dmxfd, DMX512_IOCTL_SET_PORT_TXFILTER, &txportmask);
+    printf ("DMX512_IOCTL_SET_PORT_TXFILTER -> %d\n", ret);
+    txportmask = 0;
+    ret = ioctl(dmxfd, DMX512_IOCTL_GET_PORT_TXFILTER, &txportmask);
+    printf ("DMX512_IOCTL_GET_PORT_TXFILTER -> %d\n", ret);
+    printf ("current txport filter: %08llX\n", txportmask);
+
 
     int count = 0;
     while (1)
@@ -50,15 +59,23 @@ int main (int argc , char **argv)
             exit(1);
         else
         {
+            int i;
             printf ("got something");
             struct dmx512frame frame;
             bzero(&frame, sizeof(frame));
             int n = read (dmxfd, &frame, sizeof(frame));
             printf ("[%d]\n", count++);
             printf (" port:%d\n", frame.port);
+            printf (" flags:%04X\n", frame.flags);
             printf (" breaksize:%d\n", frame.breaksize);
             printf (" startcode:%d\n", frame.startcode);
             printf (" #slots:%d\n", frame.payload_size);
+            printf (" data:");
+            for (i=0; i < frame.payload_size && i < 25; ++i)
+                printf (" %02X", frame.data[i]);
+            if (i < frame.payload_size)
+                printf ("...");
+            printf("\n");
         }
     }
     close(dmxfd);
