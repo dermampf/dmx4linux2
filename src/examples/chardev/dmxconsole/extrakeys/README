@@ -1,0 +1,19 @@
+ABOUT:
+The following steps described in this file are nessesary to add
+some more function keys to your system.
+
+
+
+To add the rest of the function keys, usualy F21..F63 you need to
+load the keymap file 'dmxconsole.kmap' using loadkeys:
+
+$ loadkeys dmxconsole.kmap
+
+Then you need to add the entries in the file termcap-dmxconsole
+to your linux terminal. After that you need to call tic to let
+it transfer your termcap file into terminfo files, that are used by curses.
+
+$ tic /etc/termcap
+
+Now you should be able to use the keypad to your right with dmxconsole.
+

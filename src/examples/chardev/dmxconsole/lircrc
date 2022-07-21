@@ -1,0 +1,128 @@
+begin dmxconsole
+  begin
+    prog = dmxconsole
+    button = play
+    remote = HarmanKardonCD
+    config = full
+  end
+  begin
+    prog = dmxconsole
+    button = stop
+    remote = HarmanKardonCD
+    config = zero
+  end
+  begin
+    prog = dmxconsole
+    button = pause
+    remote = HarmanKardonCD
+    config = toggle
+  end
+  begin
+    prog = dmxconsole
+    button = next
+    remote = HarmanKardonCD
+    config = nextslot
+  end
+  begin
+    prog = dmxconsole
+    button = prev
+    remote = HarmanKardonCD
+    config = prevslot
+  end
+  begin
+    prog = dmxconsole
+    button = forw
+    remote = HarmanKardonCD
+    config = up
+  end
+  begin
+    prog = dmxconsole
+    button = back
+    remote = HarmanKardonCD
+    config = down
+  end
+  begin
+    prog = dmxconsole
+    button = 0
+    remote = HarmanKardonCD
+    config = 0
+  end
+  begin
+    prog = dmxconsole
+    button = 1
+    remote = HarmanKardonCD
+    config = 1
+  end
+  begin
+    prog = dmxconsole
+    button = 2
+    remote = HarmanKardonCD
+    config = 2
+  end
+  begin
+    prog = dmxconsole
+    button = 3
+    remote = HarmanKardonCD
+    config = 3
+  end
+  begin
+    prog = dmxconsole
+    button = 4
+    remote = HarmanKardonCD
+    config = 4
+  end
+  begin
+    prog = dmxconsole
+    button = 5
+    remote = HarmanKardonCD
+    config = 5
+  end
+  begin
+    prog = dmxconsole
+    button = 6
+    remote = HarmanKardonCD
+    config = 6
+  end
+  begin
+    prog = dmxconsole
+    button = 7
+    remote = HarmanKardonCD
+    config = 7
+  end
+  begin
+    prog = dmxconsole
+    button = 8
+    remote = HarmanKardonCD
+    config = 8
+  end
+  begin
+    prog = dmxconsole
+    button = 9
+    remote = HarmanKardonCD
+    config = 9
+  end
+  begin
+    prog = dmxconsole
+    button = Edit
+    remote = HarmanKardonCD
+    config = selectslot
+  end
+  begin
+    prog = dmxconsole
+    button = Delete
+    remote = HarmanKardonCD
+    config = blackout
+  end
+  begin
+    prog = dmxconsole
+    button = ProgRev
+    remote = HarmanKardonCD
+    config = undo
+  end
+  begin
+    prog = dmxconsole
+    button = TapeSize
+    remote = HarmanKardonCD
+    config = crossfade
+  end
+end dmxconsole

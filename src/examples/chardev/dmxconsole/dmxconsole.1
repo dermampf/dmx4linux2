@@ -1,0 +1,196 @@
+.TH "dmxconsole" "1" "2.5" "Dirk Jagdmann <doj@cubic.org>" "dmx tool"
+.SH "NAME"
+.LP 
+dmxconsole \- simple dmx manipulating program
+.SH "SYNTAX"
+.LP 
+dmxconsole
+[\fI\-\-dmx <device>\fP]
+[\fI\-\-fkeys <number>\fP]
+[\fI\-\-js <device>\fP]
+[\fI\-\-mm <device>\fP]
+[\fI\-\-ms <device>\fP]
+[\fI\-\-pc <device>\fP]
+[\fI\-\-gpm]
+[\fI\-\-ps2 <device>\fP]
+[\fI\-\-mousescale <number>\fP]
+[<\fIfilename\fP>]
+
+.SH "OPTIONS"
+.LP 
+.TP 
+\fB\-\-dmx\fR <\fIdevice\fP>
+Set dmx device.
+.TP 
+\fB\-\-fkeys\fR <\fInumber\fP>
+Set number of function keys to use for stored cues.
+.TP 
+\fB\-\-js\fR <\fIdevice\fP>
+Use joystick connected at device.
+.TP 
+\fB\-\-mm\fR <\fIdevice\fP>
+Use serial mm/sun compatible mouse connected at device.
+.TP 
+\fB\-\-ms\fR <\fIdevice\fP>
+Use serial microsoft compatible mouse connected at device.
+.TP 
+\fB\-\-pc\fR <\fIdevice\fP>
+Use serial mousesystems compatible mouse connected at device.
+.TP 
+\fB\-\-gpm
+Use GPM mouse server.
+.TP 
+\fB\-\-ps2\fR <\fIdevice\fP>
+Use ps2 mouse connected at device.
+.TP 
+\fB\-\-curs
+Use ncurses mouse.
+.TP 
+\fB\-\-mousescale\fR <\fInumber\fP>
+Set sensitivity of mouse to number. Default value is 10.
+.TP 
+\fIfilename\fR
+Load initial channel values from this file. Saves are made to this
+filename. If you don't specify any file, nothing is loaded upon
+startup and saves are made to "default.chn".
+.SH "DESCRIPTION"
+.LP 
+dmxconsole is a simple curses console application.  You can manipulate
+dmx channels directly and store them in different cues. Cues are
+crossfaded.
+.LP 
+Use the cursor keys to select a channel. You can increase/decrease its
+value with the +/\- and PageUp/PageDown keys. The spacebar alters
+between zero and full value.
+.LP 
+With the function keys F1\-F12 you select a different cue. The new cue
+is crossfaded into the current cue. You can change the crossfadetime
+with keys 0\-9.
+.LP 
+The current set of cues are saved with 's'. The default filename is
+"default.chn" in the current directory. You can load a file upon
+startup by adding the filename to the command line. This file is then
+used to save.
+.LP 
+The last change to the current cue can by undoed with 'u'.
+.LP 
+Look at the KEYS section for a complete reference of keys.
+.SH "ENVIRONMENT VARIABLES"
+.LP 
+.TP 
+\fBDMX\fP
+Specifies the default dmx device. May be overridden by command line.
+.SH "KEYS"
+.LP 
+.TP 
+\fBCursor Keys\fR
+Move Cursor in dmxconsole
+
+.TP 
+\fBHome\fR
+Move Cursor to channel 1
+
+.TP 
+\fBEnd\fR
+Move Cursor to last channel
+
+.TP 
+\fBm\fR
+Change Display mode. Values are either shown in dmx, decimal or
+hex. In dmx mode the values range from 0\-100 with 100 shown as
+"FL". In hex and decimal mode all values are shown accuratly.
+
+.TP 
+\fBPageUp\fR
+Increase current value by 16 (0x10|$10|10h)
+
+.TP 
+\fB+\fR
+Increase current value by 1
+
+.TP 
+\fBPageDown\fR
+Lower current value by 16 (0x10|$10|10h)
+
+.TP 
+\fB\-\fR
+Lower current value by 1
+
+.TP 
+\fBSpace\fR
+Toggle current value between 0 and "FL" (255|0xff|$ff|ffh)
+
+.TP 
+\fB0\-9\fR
+Set fadetime to 0\-9 sec.
+
+.TP 
+\fBb\fR
+Black Out. Set all channels to 0.
+
+.TP 
+\fBf\fR
+Set all channels to FULL.
+
+.TP 
+\fBd\fR
+Set current channel to 0.
+
+.TP 
+\fBInsert\fR
+Insert a channel. All channels greater than the current channel are moved.
+
+.TP 
+\fBDelete\fR
+Delete channels. All channels greater then the current channel are moved.
+
+.TP 
+\fBF1\-F63\fR
+Change current cue. To enable more than 12 function keys with a standard pc keyboard
+have a look into the tools/extrakeys directory of the dmx4linux sources.
+
+.TP 
+\fBu\fR
+Undo the last change to the current cue.
+
+.TP 
+\fBp\fR
+Change palette.
+
+.TP 
+\fBn\fR
+Toggle number of the first DMX channel between 0 and 1.
+.SH "MOUSE & JOYSTICK"
+.LP 
+If you have connected and enabled a mouse or joystick you can select
+the current channel by moving your mouse. The mouse wheel will act
+like pressing keys PageUp or PageDown, thus increasing or decreasing
+the channel value by 16. The right mouse button will toggle the
+current channel like pressing the space key. If you press the left
+mouse button while moving the mouse horizontically the current channel
+value is altered.  The middle mouse button will set the current
+channel to 0..br 
+USB mice interfaced through /dev/input/mice should be used with the \-\-ps2 option.
+If you are running dmxconsole in an XTerm, rxvt or kde/gnome console you could
+use the mouse provided with ncurses with \-\-curs.
+.SH "LIRC SUPPORT"
+.LP 
+If you have the lirc daemon running you can control dmxconsole with it. Please append
+the distributed \fBlircrc\fR file to your \fB~/.lircrc\fR file. Then edit
+the section \fBdmxconsole\fR and replace the \fIremote=\fR setting with the
+name of your IR control and the \fIbutton=\fR settings with your desired 
+buttons.
+.SH "BUGS"
+.LP 
+If you use dmxconsole in a xterm, some function keys (F1\-F12) may not
+work. This is due to the termcap or terminfo system providing wrong
+keycodes for those function keys. You can either ignore those function
+keys, use a different terminal program like rxvt or use the linux
+console.
+.SH "AUTHORS"
+.LP 
+Dirk Jagdmann <doj@cubic.org>
+part of the DMX4Linux package: http://llg.cubic.org/dmx4linux
+.SH "SEE ALSO"
+.LP 
+dmxdisplay(X), dmxpanel(X)
