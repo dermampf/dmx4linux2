@@ -1,5 +1,6 @@
 CFLAGS+=-I../kernel_emulation/waitqueue/
 CFLAGS+=-I../kernel_emulation/kfifo
+CFLAGS+=-I../kernel_emulation/include/
 
 CFLAGS+=-Iuart/
 CFLAGS+=-Isuart/
@@ -38,6 +39,7 @@ SUART_CORE_OBJS= \
 $(OBJ)/dmx512_cuse_suart : \
 	$(OBJ)/dmx512_cuse_suart.o \
 	$(OBJ)/dmx512_cuse_dev.o \
+	$(OBJ)/dmx512framequeue.o \
 	$(OBJ)/dmx512_suart.o \
 	$(SUART_CORE_OBJS) \
 	$(OBJ)/wbuart_16x50.o
@@ -98,3 +100,7 @@ $(OBJ)/%.o : suart/%.c
 
 $(OBJ)/%.o : ../cuse-drivers/%.c
 	$(CC) $(CFLAGS) -c -o $@ $<
+
+$(OBJ)/%.o : ../drivers/dmx512/core/%.c
+	$(CC) $(CFLAGS) -c -o $@ $<
+
