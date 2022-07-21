@@ -63,6 +63,10 @@ struct dmx512_cuse_context
     //-- We always write the new frame to the queue.
     //-- If we have an open read_req, we look at the start of the queue
     //-- and if it is not empty we complete the read_req with that frame.
+
+    int pollnotify;
+    struct dmx512frame lastframe; // rather create a queue that holds received frames. But it should be limmited and old frames shall be thrown away.
+    struct fuse_pollhandle *pollhandle;
 };
 
 #define DMX512_CUSE_CONTEXT_COUNT (32)
@@ -81,7 +85,7 @@ static struct dmx512_cuse_context * dmx512_cuse_context(struct dmx512_cuse_card 
 
 static struct dmx512_cuse_card * dmx512_cuse_req_card(fuse_req_t);
 
-//====================================================================
+
 
 
 void dmx512_cuse_send_frame(struct dmx512_cuse_card *card,
@@ -94,8 +98,6 @@ void dmx512_cuse_send_frame(struct dmx512_cuse_card *card,
 void dmx512_cuse_handle_received_frame(struct dmx512_cuse_card *card,
                                        struct dmx512frame *frame)
 {
-    printf ("dmx512_cuse_handle_received_frame\n");
-
     int i;
     for (i = 0; i < DMX512_CUSE_CONTEXT_COUNT; ++i)
     {
@@ -106,17 +108,23 @@ void dmx512_cuse_handle_received_frame(struct dmx512_cuse_card *card,
             ctx->read_req = 0;
         }
 
+
         if (ctx->in_use && ctx->read_req)
         {
-            printf ("ctx[%d] frame.port=%d ctx.portmask=%08llX\n",
-                    i,
-                    frame->port,
-                    ctx->port_mask);
-
             if ((frame->port<64) && (ctx->port_mask & (1<<frame->port)))
             {
                 fuse_reply_buf(ctx->read_req, (void*)frame, sizeof(*frame));
                 ctx->read_req = 0;
+            }
+        }
+        else
+        {
+            if (ctx->in_use && ctx->pollhandle)
+            {
+                //ctx->lastframe = *frame;
+                memcpy(&ctx->lastframe, frame, sizeof(*frame));
+                ctx->pollnotify++;
+                fuse_notify_poll(ctx->pollhandle);
             }
         }
     }
@@ -124,9 +132,6 @@ void dmx512_cuse_handle_received_frame(struct dmx512_cuse_card *card,
 
 }
 
-
-
-//====================================================================
 
 
 static int dmx512_cuse_free_context_index(struct dmx512_cuse_card * dmx512)
@@ -195,21 +200,26 @@ static void dmx512_cuse_read(fuse_req_t req,
                              off_t  off,
                              struct fuse_file_info *fi)
 {
-    struct dmx512_cuse_context * ctx = dmx512_cuse_context(dmx512_cuse_req_card(req), fi->fh);
-    if (!ctx)
+    if (!fi)
     {
+        printf("dmx512_cuse_read: fi=%p\n", fi);
         fuse_reply_err(req, EINVAL);
         return;
     }
 
-    int nonblocking    = 0; // how to find out if open is nonblocking.
-    int data_available = 0;
+    struct dmx512_cuse_context * ctx = dmx512_cuse_context(dmx512_cuse_req_card(req), fi->fh);
+    if (!ctx)
+    {
+        fprintf(stderr, "dmx512_cuse_read fi is NULL: size:%lu off:%lu\n", size, off);
+        fuse_reply_err(req, EINVAL);
+        return;
+    }
 
+    const int data_available = ctx->lastframe.payload_size > 0;
     if (data_available)
     {
-        //fuse_reply_err(req, EAGAIN);
-        //fuse_reply_err(req, ENOENT);
-        //fuse_reply_err(req, EAGAIN);
+        fuse_reply_buf(req, (void*)(&ctx->lastframe), sizeof(ctx->lastframe));
+        bzero(&ctx->lastframe, sizeof(ctx->lastframe));
     }
     else
     {
@@ -238,6 +248,13 @@ static void dmx512_cuse_write(fuse_req_t req,
                               off_t off,
                               struct fuse_file_info *fi)
 {
+    if (!fi)
+    {
+        fprintf(stderr, "dmx512_cuse_write fi is NULL: buf:%p size:%lu off:%lu\n", buf, size, off);
+        fuse_reply_err(req, EINVAL);
+        return;
+    }
+
     struct dmx512_cuse_context * ctx = dmx512_cuse_context(dmx512_cuse_req_card(req), fi->fh);
     if (!ctx)
     {
@@ -614,18 +631,22 @@ void dmx512_cuse_poll (fuse_req_t req,
         return;
     }
 
-    if (g_pollnotify > 0)
+    // call fuse_reply_poll(req, POLLOUT) when there is space available to send the next frame.
+    if (ctx->pollnotify > 0)
     {
-        --g_pollnotify;
-        fuse_reply_poll(req, POLLIN); // POLLOUT
-        fuse_pollhandle_destroy(ph);
+        printf ("poll: have been notified of received frame\n");
+        --ctx->pollnotify;
+        fuse_reply_poll(req, POLLIN);
+        if (ctx->pollhandle)
+            fuse_pollhandle_destroy(ctx->pollhandle);
     }
     else
     {
-        struct fuse_pollhandle *oldph = g_ph;
+        struct fuse_pollhandle *oldph = ctx->pollhandle;
+        ctx->pollhandle = 0;
         if (oldph)
             fuse_pollhandle_destroy(oldph);
-        g_ph = ph;
+        ctx->pollhandle = ph;
         fuse_reply_poll(req, 0);
     }
 }
@@ -697,6 +718,7 @@ static int fuse_multisession_loop(struct fuse_session **sessions,
     struct fuse_session_data
     {
         struct fuse_session *session;
+        struct fuse_chan *ch;
         size_t bufsize;
         char *buf;
     };
@@ -716,6 +738,7 @@ static int fuse_multisession_loop(struct fuse_session **sessions,
                 return -1;
             }
             sd[i].session = se;
+            sd[i].ch = ch;
             sd[i].bufsize = bufsize;
             sd[i].buf = buf;
         }
@@ -739,8 +762,7 @@ static int fuse_multisession_loop(struct fuse_session **sessions,
         
         for (i = 0; i < num_sessions; ++i)
         {
-            struct fuse_chan *ch = fuse_session_next_chan(sd[i].session, NULL);
-            const int fd = fuse_chan_fd(ch);
+            const int fd = fuse_chan_fd(sd[i].ch);
             FD_SET(fd, &readfds);
             if (fd+1 > n)
                 n = fd+1;
@@ -760,28 +782,19 @@ static int fuse_multisession_loop(struct fuse_session **sessions,
         const int ret = select(n, &readfds, 0, 0, &timeout);
         if (ret == 0)
         {
-            printf ("timeout %d\r", timout_counter++);
-            fflush(stdout);
-            struct fuse_pollhandle *ph = g_ph;
-            if (ph)
-            {
-                g_ph = 0;
-                fuse_notify_poll(ph);
-                g_pollnotify++;
-                fuse_pollhandle_destroy(ph);
-            }
+	    printf ("timeout %d\r", timout_counter++);
+	    fflush(stdout);
         }
         if (ret <= 0)
             continue;
 
         for (i = 0; i < num_sessions; ++i)
         {
-            struct fuse_chan *ch = fuse_session_next_chan(sd[i].session, NULL);
+            struct fuse_chan *ch = sd[i].ch;
             const int fd = fuse_chan_fd(ch);
 
             if (FD_ISSET(fd, &readfds))
             {
-                //printf ("data from %d\n", fd);
                 struct fuse_chan *tmpch = ch;
                 struct fuse_buf fbuf = {
                     .mem = sd[i].buf,
@@ -804,7 +817,6 @@ static int fuse_multisession_loop(struct fuse_session **sessions,
             int fd = fdwatchers[i].fd;
             if (FD_ISSET(fd, &readfds))
             {
-              // printf ("data from %d\n", fd);
               fdwatchers[i].callback(fd, fdwatchers[i].user);
             }
           }
@@ -868,26 +880,11 @@ int dmx512_cuse_lowlevel_main(int argc, char *argv[],
             num_sessions++;
         }
 
-
-        for (i = 0; i < num_sessions; ++i)
-        {
-            struct fuse_chan *ch = fuse_session_next_chan(sessions[i], NULL);
-            int i;
-            printf ("ch=%p  fd=%d  bufsize=%zd  data=%p  session=%p\n",
-                    ch,
-                    fuse_chan_fd(ch),
-                    fuse_chan_bufsize(ch),
-                    fuse_chan_data(ch),
-                    fuse_chan_session(ch)
-                );
-        }
-
         int res = fuse_multisession_loop(sessions,
                                          num_sessions,
                                          fdwatchers,
                                          num_fd_watchers
                                          );
-
         for (i = 0; i < num_sessions; ++i)
         {
             cuse_lowlevel_teardown(sessions[i]);
