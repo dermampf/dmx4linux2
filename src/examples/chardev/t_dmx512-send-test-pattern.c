@@ -11,17 +11,20 @@
 #include <fcntl.h>
 #include <stdlib.h>
 
+#include "dump_dmx512_frame.h"
+
 /*
  * send out one dmx-frame to all cards
  * If you open /dev/dmx512/card0port0 that frame is output only to that port.
  */
 
-static int generate_pattern(unsigned char * data)
+static int generate_pattern(unsigned char * data,
+			    const int framesize)
 {
     int i;
-    for (i = 0; i < 513; ++i)
+    for (i = 0; i < framesize; ++i)
         data[i] = (unsigned char)i;
-    return 513;
+    return framesize;
 }
 
 int main (int argc, char **argv)
@@ -31,12 +34,16 @@ int main (int argc, char **argv)
     if (dmxfd < 0)
 	return 1;
 
+    const int framesize = (argc > 3) ? atoi(argv[3]) : 513;
+
     struct dmx512frame frame;
     bzero(&frame, sizeof(frame));
-    frame.port = (argc > 3) ? atoi(argv[3]) : 0;
+    frame.port = (argc > 2) ? atoi(argv[2]) : 0;
     frame.breaksize = 0;
-    frame.payload_size = generate_pattern(frame.data) - 1;
+    frame.payload_size = generate_pattern(frame.data, framesize) - 1;
     write (dmxfd, &frame, sizeof(frame));
+
+    dump_dmx512_frame (-1, &frame);
 
     close(dmxfd);
 
