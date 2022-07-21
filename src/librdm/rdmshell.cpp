@@ -9,6 +9,7 @@
 #include <stdlib.h>
 #include <iostream>
 #include <string>
+#include <unistd.h>
 #include <vector>
 
 #include <readline/readline.h>
