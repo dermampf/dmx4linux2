@@ -4,8 +4,7 @@
  */
 #pragma once
 
-#include <boost/algorithm/string/split.hpp>
-#include <boost/algorithm/string/classification.hpp>
+#include <functional>
 
 #include <vector>
 #include <map>
@@ -27,6 +26,39 @@ static std::string trim(const std::string& str,
 
     return str.substr(strBegin, strRange);
 }
+
+#ifdef HAVE_BOOST_SPLIT
+#include <boost/algorithm/string/split.hpp>
+#include <boost/algorithm/string/classification.hpp>
+std::vector<std::string> split_command(const std::string & command)
+{
+    const std::string command = trim(std::string(_command));
+    std<::vector<std::string> args;
+    boost::split(args,
+		 command,
+		 boost::is_any_of(" \t"),
+		 boost::token_compress_on);
+    return args;
+}
+#else
+std::vector<std::string> split_command(const std::string & _command)
+{
+    const char seperator = ' ';
+    const std::string command = trim(std::string(_command));
+    std::vector<std::string> output;
+    std::string::size_type prev_pos = 0, pos = 0;
+
+    while((pos = command.find(seperator, pos)) != std::string::npos)
+    {
+        std::string substring( command.substr(prev_pos, pos-prev_pos) );
+        output.push_back(substring);
+        prev_pos = ++pos;
+    }
+    output.push_back(command.substr(prev_pos, pos-prev_pos)); // Last word
+    return output;
+}
+#endif
+
 
 class CommandParser
 {
@@ -77,13 +109,7 @@ public:
 
     bool Execute(const char * _command)
 	{
-	    const std::string command = trim(std::string(_command));
-	    Arguments args;
-	    boost::split(args,
-			 command,
-			 boost::is_any_of(" \t"),
-			 boost::token_compress_on);
-	    return Execute(args);
+	    return Execute(split_command(_command));
 	}
 
     bool Execute(const Arguments & args)
