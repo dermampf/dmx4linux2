@@ -18,7 +18,13 @@ TARGETS=$(OBJDIR)t_dmx512-chardev-write \
 	$(OBJDIR)t_dmx512-chardev-info \
 	$(OBJDIR)t_sinus
 
-all ::   $(TARGETS)
+all :: $(OBJDIR) $(TARGETS)
+
+$(OBJDIR)t_% : t_%.c
+	$(CC) $(CFLAGS) -o $@ $^ $(LDLIBS)
+
+$(OBJDIR):
+	-mkdir -p $@
 
 install:
 	mkdir -p $(HOME)/dmxbin/
@@ -26,7 +32,3 @@ install:
 
 clean:
 	-rm -f *.o *~ $(TARGETS)
-
-$(OBJDIR)% : $(OBJDIR)%.o
-
-$(OBJDIR)%.o : $(OBJDIR)%.c
