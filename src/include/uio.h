@@ -48,5 +48,7 @@ static long uio_wait_for_interrupt(struct uio_handle * uio)
     return -1;
 }
 
+long uio_wait_for_interrupt_timeout(struct uio_handle * uio, struct timeval * timeout);
+
 
 #endif

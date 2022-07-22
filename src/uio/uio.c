@@ -52,7 +52,7 @@ unsigned char  uio_peek8 (struct uio_handle * h, unsigned long address)
 
 struct   uio_handle * uio_open (const char * name, const unsigned long size)
 {
-  const int fd = open(name, O_RDWR);
+  const int fd = open(name, O_RDWR /* | O_NONBLOCK */);
   if (fd < 0)
     {
       perror("open uio\n");
@@ -137,4 +137,29 @@ void list_all_uios()
     return -1;
   }
   iterate_uio(list_uio, NULL);
+}
+
+
+long uio_wait_for_interrupt_timeout(struct uio_handle * uio, struct timeval * timeout)
+{
+    long info;
+    int    ret;
+    fd_set rfds;
+    FD_ZERO(&rfds);
+    FD_SET(uio->fd, &rfds);
+    ret = select(uio->fd + 1, &rfds, NULL, NULL, timeout);
+
+    if (ret == 0) // timeout
+      return -1;
+
+    if (ret < 0) // error
+      return ret;
+
+    if (!FD_ISSET(uio->fd, &rfds)) // not us
+      return -1;
+
+    if (sizeof(info) == read(uio->fd, &info, sizeof(info)))
+        return info;
+
+    return -1;
 }
