@@ -333,6 +333,7 @@ int main(int argc, char** argv)
 
     struct dmx512_cuse_card_config card;
 
+    card.cardno = (argc > 1) ? strtoul(argv[1], 0, 0) : 0;
     card.userpointer = &uartdmx_cards[0];
     card.ops = &uartdmx_ops;
 
