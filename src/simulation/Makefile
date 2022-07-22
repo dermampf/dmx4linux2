@@ -7,18 +7,25 @@ CFLAGS+=-Isuart/
 
 LDLIBS+=-lpthread
 
-CFLAGS+=-Ihardware-model/
-LDLIBS+=-Lhardware-model/ -lhardware_model
+SIM_CFLAGS+=-Ihardware-model/
+SIM_LDLIBS+=-Lhardware-model/ -lhardware_model
 
 CFLAGS+=-I../include/
 CFLAGS+=-I../cuse-drivers/
 
 CFLAGS+=-g -ggdb
 
-OBJ=obj-x86
+ARCH?=x86
+OBJ=obj-$(ARCH)
 
 
-all : $(OBJ) $(OBJ)/t_suart $(OBJ)/t_suart_uio $(OBJ)/t_suart_parport $(OBJ)/dmx512_cuse_suart
+all :   $(OBJ) \
+	$(OBJ)/t_suart \
+	$(OBJ)/t_suart_uio \
+	$(OBJ)/t_suart_parport \
+	$(OBJ)/dmx512_cuse_suart \
+	$(OBJ)/dmx512_cuse_suart_parport \
+	$(OBJ)/dmx512_cuse_suart_uio
 
 
 
@@ -30,9 +37,7 @@ SUART_CORE_OBJS= \
 	$(OBJ)/waitqueue.o \
 	$(OBJ)/streamuart.o \
 	$(OBJ)/streamuart_event.o \
-	$(OBJ)/pc16cx50.o \
-	$(OBJ)/dmx_device.o
-
+	$(OBJ)/pc16cx50.o
 
 
 
@@ -42,15 +47,33 @@ $(OBJ)/dmx512_cuse_suart : \
 	$(OBJ)/dmx512framequeue.o \
 	$(OBJ)/dmx512_suart.o \
 	$(SUART_CORE_OBJS) \
-	$(OBJ)/wbuart_16x50.o
+	$(OBJ)/wbuart_16x50.o $(OBJ)/dmx_device.o
+	$(CC) $(CFLAGS) $(SIM_CFLAGS) -o $@ $^ $(LDLIBS) $(SIM_LDLIBS) -lfuse
+
+$(OBJ)/dmx512_cuse_suart_uio : \
+	$(OBJ)/dmx512_cuse_suart.o \
+	$(OBJ)/dmx512_cuse_dev.o \
+	$(OBJ)/dmx512framequeue.o \
+	$(OBJ)/dmx512_suart.o \
+	$(SUART_CORE_OBJS) \
+	$(OBJ)/wbuart_16x50_uio.o $(OBJ)/uio.o
+	$(CC) $(CFLAGS) -o $@ $^ $(LDLIBS) -lfuse
+
+$(OBJ)/dmx512_cuse_suart_parport : \
+	$(OBJ)/dmx512_cuse_suart.o \
+	$(OBJ)/dmx512_cuse_dev.o \
+	$(OBJ)/dmx512framequeue.o \
+	$(OBJ)/dmx512_suart.o \
+	$(SUART_CORE_OBJS) \
+	$(OBJ)/wbuart_16x50_parport.o
 	$(CC) $(CFLAGS) -o $@ $^ $(LDLIBS) -lfuse
 
 $(OBJ)/t_suart : \
 	$(OBJ)/t_dmx512_suart.o \
 	$(OBJ)/dmx512_suart.o \
 	$(SUART_CORE_OBJS) \
-	$(OBJ)/wbuart_16x50.o
-	$(CC) $(CFLAGS) -o $@ $^ $(LDLIBS)
+	$(OBJ)/wbuart_16x50.o $(OBJ)/dmx_device.o
+	$(CC) $(CFLAGS) $(SIM_CFLAGS) -o $@ $^ $(LDLIBS) $(SIM_LDLIBS)
 
 
 $(OBJ)/t_suart_parport : \
@@ -64,7 +87,7 @@ $(OBJ)/t_suart_uio : \
 	$(OBJ)/t_dmx512_suart.o \
 	$(OBJ)/dmx512_suart.o \
 	$(SUART_CORE_OBJS) \
-	$(OBJ)/wbuart_16x50_uio.o
+	$(OBJ)/wbuart_16x50_uio.o $(OBJ)/uio.o
 	$(CC) $(CFLAGS) -o $@ $^ $(LDLIBS)
 
 
@@ -98,9 +121,15 @@ $(OBJ)/%.o : uart/%.c
 $(OBJ)/%.o : suart/%.c
 	$(CC) $(CFLAGS) -c -o $@ $<
 
+$(OBJ)/%.o : ../uio/%.c
+	$(CC) $(CFLAGS) -c -o $@ $<
+
 $(OBJ)/%.o : ../cuse-drivers/%.c
 	$(CC) $(CFLAGS) -c -o $@ $<
 
 $(OBJ)/%.o : ../drivers/dmx512/core/%.c
 	$(CC) $(CFLAGS) -c -o $@ $<
+
+$(OBJ)/wbuart_16x50.o : uart/wbuart_16x50.c
+	$(CC) $(CFLAGS) $(SIM_CFLAGS) -c -o $@ $<
 
