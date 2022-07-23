@@ -291,10 +291,16 @@ static int handle_one_event (struct suart_pc16x50 * suart,
       
     case STREAMUART_EVENT_ENABLETX:
       if (debug) printf ("STREAMUART_EVENT_ENABLETX\n");
+      pc16x50_set_ier_bits(suart->uart,
+                           PC16C550_IER_TRANSMITTER_HOLDING_REGISTER_EMPTY
+                           );
       break;
       
     case STREAMUART_EVENT_DISABLETX:
       if (debug) printf ("STREAMUART_EVENT_DISABLETX\n");
+      pc16x50_clear_ier_bits(suart->uart,
+                             PC16C550_IER_TRANSMITTER_HOLDING_REGISTER_EMPTY
+                             );
       break;
       
     case STREAMUART_EVENT_ENABLERX:
@@ -408,7 +414,7 @@ static int handle_all_pending_events(struct suart_pc16x50 * suart)
       // THRE is empty, but Transmitter not, wait until it is empty,
       // as we get no Transmitter empty interrupt.
       while ((pc16x50_read_lsr(suart->uart) & PC16550_LSR_TRANSMITTER_EMPTY)==0)
-        usleep(1000);
+	 usleep(1000);
     }
 
   while (suart_txavailable(uart) > 0)
@@ -477,6 +483,10 @@ void * suart_handler_pc16x50 (void *arg)
       const int ret = wait_event_interruptible_timeout(suart->suart.txwaitqueue, 1, milliseconds_to_jiffies(timeout_ms));
       if (ret == 1)
           flush_rxbuffer_fifo(suart);
+      else if (ret < 0)
+	{
+	  printf("wait_event_interruptible_timeout=%d/%s\n", ret, strerror(-ret));
+	}
     }
 }
 
@@ -526,11 +536,11 @@ struct suart_pc16x50 * suart_pc16x50_create (wait_queue_head_t *rxwaitqueue)
 
   suart->rxenabled = 1;
   pc16x50_flush_rx_fifo(suart->uart);
-  pc16x50_set_ier_bits(suart->uart,
-                       PC16C550_IER_RECEIVED_DATA_AVAILABLE
+  pc16x50_set_ier_bits(suart->uart, 0
+                       // | PC16C550_IER_RECEIVED_DATA_AVAILABLE
                        | PC16C550_IER_RECEIVER_LINE_STATUS
                        | PC16C550_IER_MODEM_STATUS
-                       | PC16C550_IER_TRANSMITTER_HOLDING_REGISTER_EMPTY
+                       // | PC16C550_IER_TRANSMITTER_HOLDING_REGISTER_EMPTY
                        );
   pc16x50_set_fifo_trigger_level(suart->uart, 14);
 
@@ -769,7 +779,7 @@ static void dmx512suart_send_init_events(struct dmx512suart_port * dmxport)
     suart_event_disable_tx(&events[count++]);
     suart_event_enable_rx(&events[count++]);
     suart_event_change_line(&events[count++], SUART_LINE_RTS | SUART_LINE_DTR, SUART_LINE_DTR);
-    suart_event_echo(&events[count++], 12345678);
+    suart_event_echo(&events[count++], 12345678); // port initialized.
     if (dmxport && dmxport->suart)
         suart_put_txevents (&dmxport->suart->suart, events, count);
 }
