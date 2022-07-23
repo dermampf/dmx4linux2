@@ -22,16 +22,26 @@
 
 #include "dmx512_suart.h"
 
+struct uartdmx_card;
+struct uartdmx_port
+{
+    struct dmx512suart_port * dmxport;
+    struct uartdmx_card * card;
+    int portno;
+    int uio_index;
+};
+
 struct uartdmx_card
 {
     char  customer_name[64];
     char  port_label[64]; // no interface has more than 4 ports.
-    struct dmx512suart_port * dmxport;
+  //struct dmx512suart_port * dmxport;
+    struct uartdmx_port ports[32];
+    int num_ports;
     struct dmx512_cuse_card * card;
 };
 
-
-static struct uartdmx_card uartdmx_cards[4]; // currently support only up to 4 cards
+static struct uartdmx_card uartdmx_card;
 
 static const enum dmx4linux_tuple_id supported_card_tuples[] =
 {
@@ -225,23 +235,23 @@ static int uartdmx_changePortInfo (struct dmx512_cuse_card * card,
 
 
 static void dmx512_receive_frame(void * handle,
+				 int flags,
                                  unsigned char * dmx_data,
                                  int dmxsize)
 {
-  printf ("dmx512_receive_frame\n");
     if (handle)
     {
-        struct uartdmx_card * user = (struct uartdmx_card *)handle;
-        if (user)
+	struct uartdmx_port * dmxport = (struct uartdmx_port *)handle;
+        if (dmxport && dmxport->card)
         {
             struct dmx512frame frame;
             memset(&frame, 0, sizeof(frame));
-            frame.port  = 0;
-            frame.flags = 0;
+            frame.port  = dmxport->portno;
+            frame.flags = flags;
             frame.breaksize = 88/4; // As we can not tell how long the break was, lets assume 88us.
             frame.payload_size = (dmxsize < 513) ? dmxsize : 513;
             memcpy (frame.data, dmx_data, frame.payload_size);
-            dmx512_cuse_handle_received_frame(user->card, &frame);
+            dmx512_cuse_handle_received_frame(dmxport->card->card, &frame);
         }
     }
 }
@@ -254,10 +264,17 @@ static int uartdmx_init          (struct dmx512_cuse_card * card)
     struct uartdmx_card * user = (struct uartdmx_card *)(cc ? cc->userpointer : 0);
     // LOG ("open port %s for uart dmx", user->uartname);
 
-    user->dmxport = dmx512suart_create_port (dmx512_receive_frame, user);
+    // user->dmxport = dmx512suart_create_port (dmx512_receive_frame, user);
+    int i;
+    for (i = 0; i < user->num_ports; ++i)
+    {
+	user->ports[i].dmxport = dmx512suart_create_port_with_index (dmx512_receive_frame, &user->ports[i], user->ports[i].uio_index);
+	if (!user->ports[i].dmxport)
+	  return -1;
+	user->ports[i].card = user;
+	user->ports[i].portno = i;
+    }
     user->card = card;
-    if (!user->dmxport)
-      return -1;
     return 0;
 }
 
@@ -266,32 +283,33 @@ static int uartdmx_cleanup       (struct dmx512_cuse_card * card)
     LOG ("uartdmx_cleanup");
     struct dmx512_cuse_card_config * cc = dmx512_cuse_card_config(card);
     struct uartdmx_card * user = (struct uartdmx_card *)(cc ? cc->userpointer : 0);
-    dmx512suart_delete_port (user->dmxport);
+    int i;
+    for (i = 0; i < user->num_ports; ++i)
+	dmx512suart_delete_port (user->ports[i].dmxport);
 }
 
 
 static int uartdmx_sendFrame     (struct dmx512_cuse_card * card,
                                   struct dmx512frame *frame)
 {
-    LOG ("uartdmx_sendFrame");
     struct dmx512_cuse_card_config * cc = dmx512_cuse_card_config(card);
     struct uartdmx_card * user = (struct uartdmx_card *)(cc ? cc->userpointer : 0);
-    if (user->dmxport && (frame->port == 0) && (frame->payload_size <= 513))
+    struct uartdmx_port * dmxport = (frame->port < user->num_ports) ? &(user->ports[frame->port]) : 0;
+
+    if (dmxport && (frame->payload_size <= 513) )
     {
-      /*dmx512suart_send_frame(user->dmxport,
+        dmx512suart_set_dtr (dmxport->dmxport, 1);
+        dmx512suart_send_frame(dmxport->dmxport,
+			       frame->flags,
                                frame->data,
                                frame->payload_size);
-      */
-        dmx512suart_set_dtr (user->dmxport, 1);
-        usleep(50*000);
-        dmx512suart_set_dtr (user->dmxport, 0);
-        printf("OK\n");
+        dmx512suart_set_dtr (dmxport->dmxport, 0);
     }
     else
       {
-        if (!user->dmxport)
+        if (!dmxport)
           printf ("dmxport is 0\n");
-        if (frame->port)
+        if (dmxport)
           printf ("dmxport is not 0\n");
         if (frame->payload_size <= 513)
           printf ("frame size > 513\n");
@@ -323,28 +341,37 @@ int main(int argc, char** argv)
     // Compile official example and use -h
     const char* cusearg[] = { "test", "-f" /*, "-d"*/ };
 
-    if (argc == 2 && strcmp(argv[1], "--help")==0)
+    if (argc < 3 || strcmp(argv[1], "--help")==0)
     {
-        LOG ("usage: %s dmx512_cuse_dev <cardno>", argv[0]);
+        LOG ("usage: %s dmx512_cuse_dev <cardno> <uioindex0> [<uioindexN>]*", argv[0]);
         return 1;
     }
+    dmx512_core_init();
 
-    bzero(&uartdmx_cards, sizeof(uartdmx_cards));
+    bzero(&uartdmx_card, sizeof(uartdmx_card));
+    uartdmx_card.num_ports = argc-2;
+    if (uartdmx_card.num_ports > 32)
+      uartdmx_card.num_ports = 32;
+    int i;
+    for (i = 0; i < uartdmx_card.num_ports; ++i)
+      uartdmx_card.ports[i].uio_index = strtoul(argv[2+i], 0, 0);
 
     struct dmx512_cuse_card_config card;
 
     card.cardno = (argc > 1) ? strtoul(argv[1], 0, 0) : 0;
-    card.userpointer = &uartdmx_cards[0];
+    card.userpointer = &uartdmx_card;
     card.ops = &uartdmx_ops;
 
-    strcpy(uartdmx_cards[0].customer_name, "customer label");
-    snprintf(uartdmx_cards[0].port_label, 63, "UART%d", 0);
+    strcpy(uartdmx_card.customer_name, "customer label");
+    snprintf(uartdmx_card.port_label, 63, "UART%d", 0);
 
     const int ret = dmx512_cuse_lowlevel_main(
         sizeof(cusearg)/sizeof(cusearg[0]),
         (char**) &cusearg,
         &card, 1,
         NULL, 0);
+
+    dmx512_core_exit();
 
     return ret;
 }

@@ -7,6 +7,8 @@
 #include "../uart/pc16cx50_registers.h"
 #include "../uart/pc16cx50.h"
 
+#include "linux/dmx512/dmx512frame.h"
+#include "../cuse-drivers/rdm_priv.h"
 
 #include <stdio.h>
 #include <unistd.h>
@@ -502,7 +504,8 @@ static void suart_pc16x50_irqfunc(int irq, void *arg)
 #include "../uart/wbuart_16x50.h"
 #endif
 
-struct suart_pc16x50 * suart_pc16x50_create (wait_queue_head_t *rxwaitqueue)
+static struct suart_pc16x50 * suart_pc16x50_create (wait_queue_head_t *rxwaitqueue,
+						    int index)
 {
   struct suart_pc16x50 * suart = malloc (sizeof(struct suart_pc16x50));
   if (!suart)
@@ -519,7 +522,7 @@ struct suart_pc16x50 * suart_pc16x50_create (wait_queue_head_t *rxwaitqueue)
 #ifdef REAL_UART
   suart->uart = 0;
 #else
-  suart->uart = wbuart_pc16x50_create();
+  suart->uart = wbuart_pc16x50_create_by_index(index);
 #endif
   if (!suart->uart)
     {
@@ -595,6 +598,7 @@ struct dmx512suart_port
     int       stop_rxhandler;
   
     void (*frame_received)(void *userhandle,
+			   int flags,
                            unsigned char * dmx_data,
                            int dmxsize);
     void *frame_received_handle;
@@ -602,11 +606,13 @@ struct dmx512suart_port
 
 
 static void dmx512suart_received_frame(struct dmx512suart_port * dmxport,
+				       int flags,
                                  unsigned char * dmx_data,
                                  int dmxsize)
 {
     if (dmxport->frame_received)
         dmxport->frame_received(dmxport->frame_received_handle,
+				flags,
                                 dmx_data,
                                 dmxsize);
 }
@@ -627,7 +633,7 @@ static void * dmx512suart_rxfifo_handler (void *arg)
               switch (e.event_type)
                 {
                 case STREAMUART_EVENT_ECHO:
-                  printf ("echo reply %u\n", e.echo.eventid);
+                  //printf ("echo reply %u\n", e.echo.eventid);
                   break;
 
                 case STREAMUART_EVENT_GETBAUDRATE:
@@ -655,7 +661,7 @@ static void * dmx512suart_rxfifo_handler (void *arg)
                       if(debug) printf ("dmxsize:%d dmx_lock_size:%d  locked:%d\n", dmxport->dmxsize, dmxport->dmx_lock_size, dmxport->dmx_locked);
                       if (dmxport->dmx_locked && (dmxport->dmxsize == dmxport->dmx_lock_size))
                         {
-                          dmx512suart_received_frame(dmxport, dmxport->dmx_data, dmxport->dmxsize);
+                          dmx512suart_received_frame(dmxport, 0, dmxport->dmx_data, dmxport->dmxsize);
                           dmxport->dmxsize = 0;
                           dmxport->dmxstate = 0;
                         }
@@ -690,7 +696,7 @@ static void * dmx512suart_rxfifo_handler (void *arg)
                               dmxport->dmx_lock_size = dmxport->dmxsize;
                             }
 
-                          dmx512suart_received_frame(dmxport, dmxport->dmx_data, dmxport->dmxsize);
+                          dmx512suart_received_frame(dmxport, 0, dmxport->dmx_data, dmxport->dmxsize);
                           dmxport->dmxsize=0;
                         }
                       dmxport->dmxstate = 1;
@@ -725,46 +731,129 @@ static void * dmx512suart_rxfifo_handler (void *arg)
 }
 
 
+static u16 dmx512_calculate_rdm_checksum(const u8 * data, const int size)
+{
+        u16 sum = 0;
+        int i;
+        for (i = 0; i < size; ++i)
+                sum += data[i];
+        return sum;
+}
+
+/* @dmx512frame_is_rdm_discover expects that is_rdm has allready been called */
+static int dmx512_is_rdm_discover(u8 * data, const int count)
+{
+  return  (data[DMX_POS_STARTCODE] == SC_RDM) &&
+                (data[RDM_POS_SUBSTARTCODE] == SC_SUB_MESSAGE) &&
+                (data[RDM_POS_COMMAND_CLASS] == DISCOVERY_COMMAND) &&
+                (data[RDM_POS_PID]   == (u8)(DISC_UNIQUE_BRANCH>>8)) &&
+                (data[RDM_POS_PID+1] == (u8)(DISC_UNIQUE_BRANCH)) &&
+                (data[RDM_POS_PDL] == 12);
+}
+
+
+static int dmx512_is_rdm_discover_reply(u8 * data, const int count)
+{
+  return  (data[DMX_POS_STARTCODE] == SC_RDM) &&
+                (data[RDM_POS_SUBSTARTCODE] == SC_SUB_MESSAGE) &&
+                (data[RDM_POS_COMMAND_CLASS] == DISCOVERY_COMMAND_RESPONSE) &&
+                (data[RDM_POS_PID]   == (u8)(DISC_UNIQUE_BRANCH>>8)) &&
+                (data[RDM_POS_PID+1] == (u8)(DISC_UNIQUE_BRANCH)) &&
+                (data[RDM_POS_PDL] == 0);
+}
+
+
+
 static  int dmx512suart_create_frame(struct suart_event_s * events,
                                     const int maxevents,
-                                    int startcode,
+				    int flags,
                                     unsigned char *dmxdata,
-                                    int slotcount)
+                                    int payload_count)
 {
   int count = 0;
   int ret;
 
-  if ((13 + (slotcount+13)/14) > maxevents)
+  if ((13 + (payload_count+13)/14) > maxevents)
     return -1;
-  
+
   suart_event_disable_rx(&events[count++]);
   suart_event_enable_tx(&events[count++]);
   suart_event_change_line(&events[count++], SUART_LINE_RTS, SUART_LINE_RTS);
-  suart_event_set_format(&events[count++], 8, 'n', 1);
-  suart_event_change_baudrate(&events[count++], 100500);
-  suart_event_data_inline_small_va(&events[count++], 1, 0);
-  suart_event_set_format(&events[count++], 8, 'n', 2);
-  suart_event_change_baudrate(&events[count++], 250000);
-  suart_event_data_inline_small_va(&events[count++], 1, 0);
-  ret = suart_event_data_inline(&events[count], maxevents-13, dmxdata, slotcount);
-  if (ret <= 0)
-    return -1;
-  count += ret;
+
+  if (dmx512_is_rdm_discover_reply(dmxdata, payload_count))
+    {
+      unsigned char buffer[24];
+      unsigned char * p = buffer;
+      *(p++) = 0xFE; // 1
+      *(p++) = 0xFE; // 2
+      *(p++) = 0xFE; // 3
+      *(p++) = 0xFE; // 4
+      *(p++) = 0xFE; // 5
+      *(p++) = 0xFE; // 6
+      *(p++) = 0xFE; // 7
+      *(p++) = 0xAA; // 8
+      unsigned char * checksum_start = p;
+      *(p++) = 0xAA | dmxdata[RDM_POS_SRC_UID]; // 9
+      *(p++) = 0x55 | dmxdata[RDM_POS_SRC_UID]; // 10
+      *(p++) = 0xAA | dmxdata[RDM_POS_SRC_UID+1]; // 11
+      *(p++) = 0x55 | dmxdata[RDM_POS_SRC_UID+1]; // 12
+      *(p++) = 0xAA | dmxdata[RDM_POS_SRC_UID+2]; // 13
+      *(p++) = 0x55 | dmxdata[RDM_POS_SRC_UID+2]; // 14
+      *(p++) = 0xAA | dmxdata[RDM_POS_SRC_UID+3]; // 15
+      *(p++) = 0x55 | dmxdata[RDM_POS_SRC_UID+3]; // 16
+      *(p++) = 0xAA | dmxdata[RDM_POS_SRC_UID+4]; // 17
+      *(p++) = 0x55 | dmxdata[RDM_POS_SRC_UID+4]; // 18
+      *(p++) = 0xAA | dmxdata[RDM_POS_SRC_UID+5]; // 19
+      *(p++) = 0x55 | dmxdata[RDM_POS_SRC_UID+5]; // 20
+      if ((p-checksum_start) != 12)
+	fprintf(stderr, "ERROR DiscoveryReplyPayload not 12 byte size (%d)\n", p-checksum_start);
+      const int checksum = dmx512_calculate_rdm_checksum(checksum_start, p-checksum_start /*12*/);
+      *(p++) = 0xAA | (u8)(checksum>>8); // 21
+      *(p++) = 0x55 | (u8)(checksum>>8); // 22
+      *(p++) = 0xAA | (u8)checksum; // 23
+      *(p++) = 0x55 | (u8)checksum; // 24
+      ret = suart_event_data_inline(&events[count], maxevents-13, buffer, p - buffer);
+      if (ret <= 0)
+	return -1;
+      count += ret;
+    }
+  else
+    {
+      if ((flags & DMX512_FLAG_NOBREAK) == 0)
+	{
+	  // A 0x00 octet (startbit+8xdatabit) at 100500 Baud is >= 88us break.
+	  suart_event_set_format(&events[count++], 8, 'n', 1);
+	  suart_event_change_baudrate(&events[count++], 100500);
+	  suart_event_data_inline_small_va(&events[count++], 1, 0);
+	  suart_event_set_format(&events[count++], 8, 'n', 2);
+	  suart_event_change_baudrate(&events[count++], 250000);
+	}
+      ret = suart_event_data_inline(&events[count], maxevents-13, dmxdata, payload_count);
+      if (ret <= 0)
+	return -1;
+      count += ret;
+    }
+
   suart_event_change_line(&events[count++], SUART_LINE_RTS, 0);
   suart_event_disable_tx(&events[count++]);
   suart_event_enable_rx(&events[count++]);
   suart_event_echo(&events[count++], 1);
+
   return count;
 }
 
 int dmx512suart_send_frame(struct dmx512suart_port * dmxport,
+			   int flags,
                            unsigned char *dmxdata,
                            int count)
 {
     if (dmxport && dmxport->suart)
     {
         struct suart_event_s events[128];
-        const int n = dmx512suart_create_frame(events, 128, dmxdata[0], &dmxdata[1], count-1);
+        const int n = dmx512suart_create_frame(events, 128,
+					       flags,
+					       dmxdata,
+					       count);
         suart_put_txevents (&dmxport->suart->suart, events, n);
     }
 }
@@ -798,6 +887,7 @@ void dmx512suart_set_dtr (struct dmx512suart_port * port, int value)
 void dmx512suart_port_init(struct dmx512suart_port * dmxport,
                            struct suart_pc16x50 * suart,
                            void (*frame_received)(void *userhandle,
+						  int flags,
                                                   unsigned char * dmx_data,
                                                   int dmxsize),
                            void * frame_received_handle
@@ -814,18 +904,21 @@ void dmx512suart_port_init(struct dmx512suart_port * dmxport,
 }
 
 
-struct dmx512suart_port * dmx512suart_create_port (
-    void (*frame_received)(void *userhandle,
-                           unsigned char * dmx_data,
-                           int dmxsize),
-    void * frame_received_handle
-    )
+struct dmx512suart_port * dmx512suart_create_port_with_index
+(
+ void (*frame_received)(void *userhandle,
+			int flags,
+                        unsigned char * dmx_data,
+                        int dmxsize),
+ void * frame_received_handle,
+ int port_index
+ )
 {
     struct dmx512suart_port * port = (struct dmx512suart_port *)malloc(sizeof(*port));
     if (port)
     {
         init_waitqueue_head(&port->rxwaitqueue);
-        struct suart_pc16x50 * suart = suart_pc16x50_create (&port->rxwaitqueue);
+        struct suart_pc16x50 * suart = suart_pc16x50_create (&port->rxwaitqueue, port_index);
         if (!suart)
         {
             printf ("failed to create suart_pc16x50\n");
@@ -841,6 +934,18 @@ struct dmx512suart_port * dmx512suart_create_port (
         dmx512suart_send_init_events(port);
     }
     return port;
+}
+
+
+struct dmx512suart_port * dmx512suart_create_port (
+    void (*frame_received)(void *userhandle,
+			   int flags,
+                           unsigned char * dmx_data,
+                           int dmxsize),
+    void * frame_received_handle
+    )
+{
+  return dmx512suart_create_port_with_index (frame_received, frame_received_handle, 0);
 }
 
 void dmx512suart_delete_port (struct dmx512suart_port * port)
@@ -889,6 +994,7 @@ int main ()
             dmxdata[i] = 0;
 
         dmx512suart_send_frame(dmxport,
+			       0,
                                dmxdata,
                                64+1);
 
