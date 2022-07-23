@@ -26,28 +26,10 @@ int iterate_uio(int (*iter) (int index, const char * uio, const char *name, void
 void list_all_uios();
 
 
-#include <unistd.h>
-
-static int uio_enable_interrupt(struct uio_handle * uio)
-{
-    long enable=1;
-    return write(uio->fd, &enable, sizeof(enable));
-}
-
-static int uio_disable_interrupt(struct uio_handle * uio)
-{
-    long enable=0;
-    return write(uio->fd, &enable, sizeof(enable));
-}
-
-static long uio_wait_for_interrupt(struct uio_handle * uio)
-{
-    long info;
-    if (sizeof(info) == read(uio->fd, &info, sizeof(info)))
-        return info;
-    return -1;
-}
-
+struct timeval;
+int  uio_enable_interrupt  (struct uio_handle * uio);
+int  uio_disable_interrupt (struct uio_handle * uio);
+long uio_wait_for_interrupt(struct uio_handle * uio);
 long uio_wait_for_interrupt_timeout(struct uio_handle * uio, struct timeval * timeout);
 
 

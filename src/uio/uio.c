@@ -163,3 +163,23 @@ long uio_wait_for_interrupt_timeout(struct uio_handle * uio, struct timeval * ti
 
     return -1;
 }
+
+int uio_enable_interrupt(struct uio_handle * uio)
+{
+    long enable=1;
+    return write(uio->fd, &enable, sizeof(enable));
+}
+
+int uio_disable_interrupt(struct uio_handle * uio)
+{
+    long enable=0;
+    return write(uio->fd, &enable, sizeof(enable));
+}
+
+long uio_wait_for_interrupt(struct uio_handle * uio)
+{
+    long info;
+    if (sizeof(info) == read(uio->fd, &info, sizeof(info)))
+        return info;
+    return -1;
+}
