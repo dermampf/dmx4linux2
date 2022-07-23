@@ -1,27 +1,34 @@
 #include "waitqueue.h"
 
 #include <sys/types.h>
+#include <string.h>
 
 // put to #include "timespec.h"
 static void timespec_add_milliseconds(struct timespec *ts, unsigned long milliseconds)
 {
-  ts->tv_nsec += milliseconds * (1000*1000);
-  ts->tv_sec += ts->tv_nsec / (1000*1000*1000L);
-  ts->tv_nsec %= 1000*1000*1000;
+  ts->tv_sec += milliseconds/1000;
+  if (milliseconds % 1000)
+    {
+      ts->tv_nsec += (milliseconds % 1000) * 1000000LL;
+      ts->tv_sec += ts->tv_nsec / 1000000000LL;
+      ts->tv_nsec %= 1000000000LL;
+    }
 }
+
 static void timespec_sub(struct timespec *ts, struct timespec *subtractor)
 {
   ts->tv_nsec -= subtractor->tv_nsec;
+  // can not be less than -999999999LL
   ts->tv_sec  -= subtractor->tv_sec;
   while (ts->tv_nsec < 0)
     {
       ts->tv_sec -= 1;
-      ts->tv_nsec += 1000*1000*1000L;
+      ts->tv_nsec += 1000000000L;
     }
 }
 unsigned long timespec_to_milliseconds(struct timespec *ts)
 {
-  return ts->tv_nsec/(1000*1000) + 1000*ts->tv_sec;
+  return ts->tv_nsec/(1000000L) + 1000*ts->tv_sec;
 }
 
 
@@ -47,9 +54,7 @@ int __wait_event_interruptible_timeout(wait_queue_head_t * wq_head, unsigned lon
   else if (ret < 0)
     ret = -ERESTART; // ERESTARTSYS in kernel.
   else
-    {
-      ret = -ret;
-    }
+    ret = -ret;
   return ret;
 }
 
