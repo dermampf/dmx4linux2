@@ -20,14 +20,20 @@ static u8 wbuart_reg_read(void * ctx, int reg)
 #include "../suart/dmx_device.h"
 struct dmx_device_s dmx;
 
-struct pc16x50 * wbuart_pc16x50_create()
+struct pc16x50 * wbuart_pc16x50_create_by_index(int index)
 {
+  (void)index;
   struct pc16x50 * u = malloc(sizeof(struct pc16x50));
   pc16x50_init(u, wbuart_reg_write, wbuart_reg_read, 0);
   wbStartup(0, 0);
   init_dmx_device(&dmx);
   wbStart();
   return u;
+}
+
+struct pc16x50 * wbuart_pc16x50_create()
+{
+  return wbuart_pc16x50_create_by_index(0);
 }
 
 void wbuart_set_irqhandler(struct pc16x50 * u,

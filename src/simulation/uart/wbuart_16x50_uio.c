@@ -69,13 +69,22 @@ static void * interrupt_thread_function(void * arg)
 
 
 
-struct pc16x50 * wbuart_pc16x50_create()
+struct pc16x50 * wbuart_pc16x50_create_by_index(int index)
 {
     struct uio_handle * uio = 0;
-    const char * uio_name = getenv("UIO_NAME");
-    if (!uio_name)
-	return 0;
-  
+
+    char uio_name[128];
+
+    if (index >= 0)
+      snprintf(uio_name, sizeof(uio_name), "/dev/uio%d", index);
+    else
+      {
+	const char * ext_uio_name = getenv("UIO_NAME");
+	if ((ext_uio_name==0) || (strlen(ext_uio_name)>=sizeof(uio_name)))
+	  return 0;
+	strncpy(uio_name, ext_uio_name, sizeof(uio_name));
+      }
+
     uio = uio_open (uio_name, 4096);
     if (!uio)
     {
@@ -91,6 +100,11 @@ struct pc16x50 * wbuart_pc16x50_create()
     pthread_create(&u->irq_thread, NULL, interrupt_thread_function, u);
 
     return &u->uart;
+}
+
+struct pc16x50 * wbuart_pc16x50_create()
+{
+  return wbuart_pc16x50_create_by_index(-1);
 }
 
 void wbuart_set_irqhandler(struct pc16x50 * u,

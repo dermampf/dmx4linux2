@@ -24,6 +24,7 @@ struct pc16x50_epp
 {
     struct pc16x50 uart;
     int fd;
+    int index; // can calculate address of of it
 
     int run;
     pthread_t  irq_thread;
@@ -31,6 +32,11 @@ struct pc16x50_epp
     void (*irqfunc)(int, void *);
     void * irqarg;
 };
+
+static int chip_address(struct pc16x50_epp * u, int reg)
+{
+  return u->index*8 + reg;
+}
 
 
 int EppWriteAddr (int parport, unsigned char *buff, size_t size)
@@ -65,13 +71,11 @@ int EppReadData (int parport, unsigned char *buff, size_t size)
   return read (parport, buff, size);
 }
 
-
-
 static void wbuart_reg_write(void * ctx, int reg, u8 value)
 {
     printf ("wbuart_reg_write(reg:%02X, value:%02X\n", reg, value);
   struct pc16x50_epp * u = (struct pc16x50_epp *)ctx;
-  unsigned char adr = reg;
+  unsigned char adr = chip_address(u, reg);
   if (EppWriteAddr (u->fd, &adr, 1) < 0)
     return;
   EppWriteData (u->fd, &value, 1);
@@ -81,7 +85,7 @@ static u8 wbuart_reg_read(void * ctx, int reg)
 {
     printf ("wbuart_reg_read(reg:%02X)\n", reg);
   struct pc16x50_epp * u = (struct pc16x50_epp *)ctx;
-  unsigned char adr = reg;
+  unsigned char adr = chip_address(u, reg);
   if (EppWriteAddr (u->fd, &adr, 1) < 0)
     return 0;
   u8 value;
@@ -119,7 +123,7 @@ void * interrupt_thread_function(void * arg)
 
 
 
-struct pc16x50 * wbuart_pc16x50_create()
+struct pc16x50 * wbuart_pc16x50_create_by_index(int index)
 {
   const int pfd  = open("/dev/parport0", O_RDWR);
   if (pfd < 0)
@@ -141,6 +145,7 @@ struct pc16x50 * wbuart_pc16x50_create()
   struct pc16x50_epp * u = malloc(sizeof(struct pc16x50_epp));
   pc16x50_init(&u->uart, wbuart_reg_write, wbuart_reg_read, u);
   u->fd = pfd;
+  u->index = index;
 
   u->run = 1;
   pthread_create(&u->irq_thread, NULL, interrupt_thread_function, u);
@@ -148,6 +153,11 @@ struct pc16x50 * wbuart_pc16x50_create()
   // open UIO device and start pthread as irq handler.
 
   return &u->uart;
+}
+
+struct pc16x50 * wbuart_pc16x50_create()
+{
+  return wbuart_pc16x50_create_by_index(0);
 }
 
 void wbuart_set_irqhandler(struct pc16x50 * u,
