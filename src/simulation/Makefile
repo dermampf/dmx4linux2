@@ -23,13 +23,14 @@ OBJ=obj-$(ARCH)
 
 
 all :   $(OBJ) \
-	$(OBJ)/t_suart \
 	$(OBJ)/t_suart_uio \
 	$(OBJ)/t_suart_parport \
-	$(OBJ)/dmx512_cuse_suart \
 	$(OBJ)/dmx512_cuse_suart_parport \
 	$(OBJ)/dmx512_cuse_suart_uio
 
+sim :   $(OBJ) \
+	$(OBJ)/dmx512_cuse_suart \
+	$(OBJ)/t_suart \
 
 
 $(OBJ) :
@@ -136,3 +137,5 @@ $(OBJ)/%.o : ../drivers/dmx512/core/%.c
 $(OBJ)/wbuart_16x50.o : uart/wbuart_16x50.c
 	$(CC) $(CFLAGS) $(SIM_CFLAGS) -c -o $@ $<
 
+$(OBJ)/dmx_device.o : suart/dmx_device.c
+	$(CC) $(CFLAGS) $(SIM_CFLAGS) -c -o $@ $<
