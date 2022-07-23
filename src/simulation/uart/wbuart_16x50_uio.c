@@ -31,16 +31,17 @@ struct pc16x50_uio
 
 static void wbuart_reg_write(void * ctx, int reg, u8 value)
 {
-    printf ("wbuart_reg_write(reg:%02X, value:%02X\n", reg, value);
+    //fprintf (stderr, "wbuart_reg_write(reg:%02X, value:%02X\n", reg, value);
     struct pc16x50_uio * u = (struct pc16x50_uio *)ctx;
     uio_poke8(u->uio, reg, value);
 }
 
 static u8 wbuart_reg_read(void * ctx, int reg)
 {
-    printf ("wbuart_reg_read(reg:%02X)\n", reg);
     struct pc16x50_uio * u = (struct pc16x50_uio *)ctx;
-    return uio_peek8 (u->uio, reg);
+    const u8 value = uio_peek8 (u->uio, reg);
+    //fprintf (stderr, "wbuart_reg_read(reg:%02X) => %02X\n", reg, value);
+    return value;
 }
 
 
