@@ -1,3 +1,5 @@
+`include "timescale.v"
+
 module top(
            clk,
            reset,
