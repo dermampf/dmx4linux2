@@ -1,6 +1,7 @@
 #include "dmx512_suart.h"
 #include <stdio.h>
 #include <unistd.h>
+#include <stdlib.h>
 
 static void hexdump(char *prefix,
                     unsigned char * data,
@@ -15,9 +16,10 @@ static void hexdump(char *prefix,
 }
 
 
-int main ()
+int main (int argc, char **argv)
 {
     void dmx512_receive_frame(void * handle,
+			      int flags,
                               unsigned char * dmx_data,
                               int dmxsize)
     {
@@ -28,39 +30,40 @@ int main ()
     struct dmx512suart_port * dmxport = dmx512suart_create_port (dmx512_receive_frame,
                                                                  0);
 
-#if 0
-    // Send dmx frame
-    int k;
-    for (k=0; k<4; ++k)
+    if (argc > 1)
     {
-        unsigned char dmxdata[512];
-        int i;
-        for (i=0; i<512; ++i)
-            dmxdata[i] = 0;
+	const int framecount = strtol(argv[1], 0, 0);
+	int i;
+	for (i = 0; i < framecount; ++i)
+	{
+	    unsigned char dmxdata[512];
+	    int i;
+	    for (i=0; i<512; ++i)
+		dmxdata[i] = 0;
 
-        dmx512suart_send_frame(dmxport,
-                               dmxdata,
-                               64+1);
-
-
-        usleep(500*1000);
+	    printf ("sending dmx\n");
+	    dmx512suart_send_frame(dmxport,
+				   0,
+				   dmxdata,
+				   64+1);
+	    usleep(33*1000);
+	}
     }
-#else
-    // only toggle the RTS line : this is mapped to LED, which lets the dmx-device send a dmx-frame.
-    int k;
-    for (k=0; k<8; ++k)
+    else
     {
-        dmx512suart_set_dtr (dmxport, 1);
-        usleep(500*1000);
-        dmx512suart_set_dtr (dmxport, 0);
-        usleep(500*1000);
+	printf ("changing dtr to provoke dmx-frame\n");
+	// only toggle the RTS line : this is mapped to LED, which lets the dmx-device send a dmx-frame.
+	int i;
+	for (i=0; i < 8; ++i)
+	{
+	    dmx512suart_set_dtr (dmxport, 1);
+	    usleep(500*1000);
+	    dmx512suart_set_dtr (dmxport, 0);
+	    usleep(500*1000);
+	}
     }
-#endif
-
-    //<<<< TO HERE >>>>>>
 
     sleep(3);
-
     dmx512suart_delete_port (dmxport);
 
     return 0;
