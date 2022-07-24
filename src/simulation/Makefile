@@ -18,8 +18,8 @@ CFLAGS+=-g -ggdb
 CFLAGS+=-D_FILE_OFFSET_BITS=64
 CFLAGS+=-DFUSE_USE_VERSION=30
 
-ARCH?=x86
-OBJ=obj-$(ARCH)
+ARCH?=$(shell uname -m)
+OBJ=obj/$(ARCH)
 
 
 all :   $(OBJ) \
