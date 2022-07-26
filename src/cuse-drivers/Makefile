@@ -1,4 +1,5 @@
-OBJDIR=obj/
+ARCH?=$(shell uname -m)
+OBJDIR=obj/$(ARCH)/
 TARGETHOST=root@192.168.10.66
 CFLAGS+=-I../include/ -I../kernel_emulation/include/
 LDLIBS+=-lpthread
