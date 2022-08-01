@@ -20,9 +20,9 @@ There are two scripts in the "scripts" folder called load.sh and unload.sh to qu
 To install them into your kernel module directory type "make install" in the src/ folder.
 
 ## purpose of the modules
-dmx512-core.ko is the dmx512 core that creates the char devices /dev/dmx-card* once a the card driver registers itself with the dmx512-core. If is also responsible for handling the file operations made on /dev/dmx-card* and handling multiple clients and managing dmx-port filters on the devices.
+dmx512-core.ko is the dmx512 core that creates the char devices /dev/dmx-card* once a card driver registers itself with the dmx512-core. It is also responsible for handling the file operations made on /dev/dmx-card* and handling multiple clients and managing dmx-port filters on the devices.
 
-dmx512_dummy.ko is a dummy device that creates to dmx-cards. The core then creates char devices for it, e.g. /dev/dmx-card0 and /dev/dmx-card1. the ports from the first and second card are interconnected. Frames send via port0 on one are received on port0 of the other card and the other way round. It is some kind of loopback dmx device.
+dmx512_dummy.ko is a dummy device that creates two dmx-cards. The core then creates char devices for it, e.g. /dev/dmx-card0 and /dev/dmx-card1. The ports from the first and second card are interconnected. Frames send via port0 on one card are received on port0 of the other card and the other way round. It is some kind of loopback dmx device.
 
 ## userspace examples
 
