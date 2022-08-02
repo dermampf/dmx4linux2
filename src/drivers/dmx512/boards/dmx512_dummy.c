@@ -70,11 +70,14 @@ static int __init dmx512_dummy_driver_init(void)
 	dmx0 = create_dummy_dmx_device("card0");
 	if (IS_ERR(dmx0))
 		return PTR_ERR(dmx0);
-	g_dmx_devices[0] = dmx0;
 
 	dmx1 = create_dummy_dmx_device("card1");
-	if (IS_ERR(dmx1))
+	if (IS_ERR(dmx1)) {
+                unregister_dmx512_device(dmx0);
+                dmx512_delete_device(dmx0);
 		return PTR_ERR(dmx1);
+        }
+	g_dmx_devices[0] = dmx0;
 	g_dmx_devices[1] = dmx1;
 
 	for (i = 0; i < ports_count; ++i)
