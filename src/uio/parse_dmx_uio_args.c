@@ -18,7 +18,7 @@ int find_uio_by_name(char *devname, const char * fdt_name)
 {
     int search_uio (int index,const char*uio,const char*name,void*user)
     {
-       printf ("[%d] uio:%s, name:%s, user:%s\n", index, uio, name, user);
+      printf ("[%d] uio:%s, name:%s, user:%s\n", index, uio, name, (char*)user);
 	if (strcmp(name, user))
 	    return -1;
 	strcat(devname, uio);
